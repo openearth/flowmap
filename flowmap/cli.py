@@ -1,15 +1,25 @@
 # -*- coding: utf-8 -*-
+import logging
 
 import click
 
+logger = logging.getLogger(__name__)
 
-@click.command()
-def main(args=None):
-    """Console script for flowmap"""
-    click.echo("Replace this message by putting your code into "
-               "flowmap.cli.main")
-    click.echo("See click documentation at http://click.pocoo.org/")
+@click.group()
+def cli():
+    pass
+
+@cli.command()
+@click.argument('dataset', type=click.Path(exists=True))
+def generate(dataset):
+    """Convert the dataset to a flow map."""
+    logger.info("Converting dataset to flowmap. ")
+
+@cli.command()
+def formats():
+    """List the available formats"""
+
 
 
 if __name__ == "__main__":
-    main()
+    generate()

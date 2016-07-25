@@ -33,7 +33,7 @@ setup(
                  'flowmap'},
     entry_points={
         'console_scripts': [
-            'flowmap=flowmap.cli:main'
+            'flowmap=flowmap.cli:cli'
         ]
     },
     include_package_data=True,

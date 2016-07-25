@@ -31,7 +31,7 @@ class TestFlowmap(unittest.TestCase):
 
     def test_command_line_interface(self):
         runner = CliRunner()
-        result = runner.invoke(cli.main)
+        result = runner.invoke(cli.generate)
         assert result.exit_code == 0
         assert 'flowmap.cli.main' in result.output
         help_result = runner.invoke(cli.main, ['--help'])
