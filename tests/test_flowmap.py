@@ -11,12 +11,10 @@ Tests for `flowmap` module.
 
 import sys
 import unittest
-from contextlib import contextmanager
 from click.testing import CliRunner
 
 from flowmap import flowmap
 from flowmap import cli
-
 
 
 class TestFlowmap(unittest.TestCase):
@@ -27,8 +25,9 @@ class TestFlowmap(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_000_something(self):
-        pass
+    def test_flowmap(self):
+        result = flowmap()
+        assert result is not None
 
     def test_command_line_interface(self):
         runner = CliRunner()
