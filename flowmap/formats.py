@@ -13,9 +13,31 @@ class Matroos(object):
     def __init__(self, path):
         self.path = path
 
-    def variables(self):
+    def globals(self):
+        """generate global variables"""
         with netCDF4.Datset(self.path) as ds:
-            variables = ds.variables.keys()
+            times = netCDF4.num2date(ds.variables['time'][:],
+                                     ds.variables['time'].units)
+            analysis_time = netCDF4.num2date(ds.variables['analysis_time'][:],
+                                             ds.variables['analysis_time'].units)
+
+            lat = ds.variables['lat'][:]
+            lon = ds.variables['lon'][:]
+
+            # initial values (used to determine shapes and stuff, maybe remove if not used)
+            sep = ds.variables['sep'][0]
+            u1 = ds.variables['velu'][0]
+            v1 = ds.variables['velv'][0]
+
+        variables = dict(
+            times=times,
+            analysis_time=analysis_time,
+            u1=u1,
+            v1=v1,
+            sep=sep,
+            lat=lat,
+            lon=lon
+        )
         return variables
 
     def validate(self):

@@ -17,16 +17,27 @@ def cli():
 @cli.command()
 @click.argument(
     "dataset",
-    type=click.Path(exists=True)
+    type=click.Path(
+        exists=True,
+        resolve_path=True
+    )
 )
 @click.argument(
     "output_dir",
-    type=click.Path(exists=True, file_okay=False, dir_okay=True, writable=True)
+    type=click.Path(
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        writable=True,
+        resolve_path=True
+    )
 )
 def generate(dataset, output_dir):
     """Convert the dataset to a flow map."""
     logger.debug("Converting dataset %s to flowmap. Saving results in %s",
                  dataset, output_dir)
+
+
 
 
 @cli.command()
