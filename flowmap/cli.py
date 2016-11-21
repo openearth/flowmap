@@ -53,6 +53,11 @@ def dump(dataset, **kwargs):
     "--dst_epsg",
     type=int
 )
+@click.option(
+    "--framescale",
+    type=float,
+    default=30.0
+)
 def generate(dataset, **kwargs):
     """Convert the dataset to a flow map."""
     klass = flowmap.formats.get_format(dataset, **kwargs)

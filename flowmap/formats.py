@@ -1,7 +1,9 @@
 # supported file formats
 import logging
 import functools
+import itertools
 
+import tqdm
 import netCDF4
 import scipy.interpolate
 import numpy as np
@@ -71,12 +73,15 @@ def get_format(dataset, **kwargs):
 
 
 class NetCDF(object):
-    def __init__(self, path, src_epsg=4326, dst_epsg=28992):
+    def __init__(self, path, src_epsg=4326, dst_epsg=28992, vmin=-0.5, vmax=0.5, framescale=3.0):
         self.path = path
         # source and destination epsg code
         self.src_epsg = src_epsg
         self.dst_epsg = dst_epsg
-
+        self.vmin = vmin
+        self.vmax = vmax
+        self.framescale = framescale
+        logger.debug("Object constructed with %s", vars(self))
     @property
     def srs(self):
         # let's define the systems
@@ -129,6 +134,7 @@ class Delft3DMatlab(NetCDF):
     @functools.lru_cache()
     def grid(self):
         """generate grid variables"""
+        logger.debug("Computing grid variables")
         src2wgs84 = self.srs['src2wgs84']
         src2utm = self.srs['src2utm']
         src2web = self.srs['src2web']
@@ -136,106 +142,114 @@ class Delft3DMatlab(NetCDF):
 
         grid = {}
         with netCDF4.Dataset(self.path) as ds:
-            times = netCDF4.num2date(ds.variables['time'][:],
-                                     ds.variables['time'].units)
+            time = netCDF4.num2date(ds.variables['time'][:],
+                                    ds.variables['time'].units)
 
-            grid['times'] = times
             x, y = ds.variables['x'][:], ds.variables['y'][:]
-            mask = np.logical_or(x.mask, y.mask)
-
-            grid['x'] = x
-            grid['y'] = y
-
-            Lon, Lat = transform(x, y, src2wgs84)
-            X_web, Y_web = transform(x, y, src2web)
-            X_utm, Y_utm = transform(x, y, src2utm)
-
-            # return
-            grid["Lon"] = Lon
-            grid["Lat"] = Lat
-            grid["X_web"] = X_web
-            grid["Y_web"] = Y_web
-            grid["X_utm"] = X_utm
-            grid["Y_utm"] = Y_utm
-
             # same thing for contours
             xcc = ds.variables['grid_x'][:]
             ycc = ds.variables['grid_y'][:]
-
-            grid["x_src_c"] = xcc
-            grid["y_src_c"] = ycc
-
-            # is any of the contour points masked?
-            mask = np.logical_or(xcc.mask, ycc.mask).any(axis=-1)
-            xycc = np.stack([xcc[~mask], ycc[~mask]], axis=-1)
-            # shape of the non masked contours
-            old_shape = xcc[~mask].shape
-            # shape of the points
-            new_shape = np.prod(xycc.shape[:2]), +  xycc.shape[2],
-            xy = xycc.reshape(new_shape)
-            lon_c, lat_c, _ = np.asarray(src2wgs84.TransformPoints(xy)).T
-            x_utm_c, y_utm_c, _ = np.asarray(src2utm.TransformPoints(xy)).T
-            # reshape back
-            lon_c = lon_c.reshape(old_shape)
-            lat_c = lat_c.reshape(old_shape)
-            x_utm_c = x_utm_c.reshape(old_shape)
-            y_utm_c = y_utm_c.reshape(old_shape)
-            # store in the proper locations
-            Lon_c = np.ma.masked_all_like(xcc)
-            Lat_c = np.ma.masked_all_like(ycc)
-            Lon_c[~mask] = lon_c
-            Lat_c[~mask] = lat_c
-            X_utm_c = np.ma.masked_all_like(xcc)
-            Y_utm_c = np.ma.masked_all_like(ycc)
-            X_utm_c[~mask] = x_utm_c
-            Y_utm_c[~mask] = y_utm_c
-            # return
-            grid["lon_c"] = lon_c
-            grid["Lon_c"] = Lon_c
-            grid["Lat_c"] = Lat_c
-            grid["X_utm_c"] = X_utm_c
-            grid["Y_utm_c"] = Y_utm_c
-
-            X_utm_c_a, X_utm_c_b = transform(xcc, ycc, src2utm)
-
-            grid['X_distort'], grid['Y_distort'] = self.compute_distortion(X_utm, Y_utm, utm2web)
 
             # initial values (used to determine shapes and stuff, maybe remove if not used)
             grid["s1_0"] = np.squeeze(ds.variables['waterlevel'][0])
             grid["u1_0"] = np.squeeze(ds.variables['velocity_x'][0])
             grid["v1_0"] = np.squeeze(ds.variables['velocity_y'][0])
 
+        # store variables in grid
+        grid['time'] = time
+        grid['x'] = x
+        grid['y'] = y
+
+        # compute other coordinate systems
+        Lon, Lat = transform(x, y, src2wgs84)
+        X_web, Y_web = transform(x, y, src2web)
+        X_utm, Y_utm = transform(x, y, src2utm)
+
+        # return
+        grid["Lon"] = Lon
+        grid["Lat"] = Lat
+        grid["X_web"] = X_web
+        grid["Y_web"] = Y_web
+        grid["X_utm"] = X_utm
+        grid["Y_utm"] = Y_utm
+
+        grid["x_src_c"] = xcc
+        grid["y_src_c"] = ycc
+
+        # is any of the contour points masked?
+        mask = np.logical_or(xcc.mask, ycc.mask).any(axis=-1)
+        xycc = np.stack([xcc[~mask], ycc[~mask]], axis=-1)
+        # shape of the non masked contours
+        old_shape = xcc[~mask].shape
+        # shape of the points
+        new_shape = np.prod(xycc.shape[:2]), +  xycc.shape[2],
+        xy = xycc.reshape(new_shape)
+        lon_c, lat_c, _ = np.asarray(src2wgs84.TransformPoints(xy)).T
+        x_utm_c, y_utm_c, _ = np.asarray(src2utm.TransformPoints(xy)).T
+        # reshape back
+        lon_c = lon_c.reshape(old_shape)
+        lat_c = lat_c.reshape(old_shape)
+        x_utm_c = x_utm_c.reshape(old_shape)
+        y_utm_c = y_utm_c.reshape(old_shape)
+        # store in the proper locations
+        Lon_c = np.ma.masked_all_like(xcc)
+        Lat_c = np.ma.masked_all_like(ycc)
+        Lon_c[~mask] = lon_c
+        Lat_c[~mask] = lat_c
+        X_utm_c = np.ma.masked_all_like(xcc)
+        Y_utm_c = np.ma.masked_all_like(ycc)
+        X_utm_c[~mask] = x_utm_c
+        Y_utm_c[~mask] = y_utm_c
+        # return
+        grid["lon_c"] = lon_c
+        grid["Lon_c"] = Lon_c
+        grid["Lat_c"] = Lat_c
+        grid["X_utm_c"] = X_utm_c
+        grid["Y_utm_c"] = Y_utm_c
+
+        grid['X_distort'], grid['Y_distort'] = self.compute_distortion(X_utm, Y_utm, utm2web)
+        logger.debug("Grid generated")
         return grid
 
     def animate(self):
         """generate an animation (set of png's)"""
 
+        logger.debug("Generating animation")
         F, X, Y = self.canvas['F'], self.canvas['X'], self.canvas['Y']
 
         X_web = self.grid['X_web']
         Y_web = self.grid['Y_web']
         coordinate_mask = np.logical_or(X_web.mask, Y_web.mask)
 
-        vmin, vmax = -0.2, 0.2
-        N = matplotlib.colors.Normalize(vmin, vmax, clip=True)
-        for i, t in enumerate(self.grid['time']):
-            # get data for t = t
-            data = self.variables(i)
-            # compute uv and mask with coordinate mask
-            uv = np.c_[data['u1'][~coordinate_mask], data['v1'][~coordinate_mask].ravel()]
-            F.values = uv.astype(F.values.dtype)
-            UV = F(X, Y)
-            RG = N(UV)
-            R, G = RG[..., 0], RG[..., 1]
+        framescale = float(self.framescale)
+        count = itertools.count()
 
-            # cells without a velocity
-            value_mask = np.logical_and(UV[..., 0] == 0.0, UV[..., 1] == 0.0)
-            # masked cells
-            B = np.zeros_like(R) + np.logical_and(self.canvas['is_grid'], ~value_mask)
-            RGB = np.dstack([R, G, B])
-            # store in filename
-            # TODO: generate with ffmpeg
-            plt.imsave('test_%04d.png' % (i,), RGB)
+        N = matplotlib.colors.Normalize(self.vmin, self.vmax, clip=True)
+        for i in tqdm.tqdm(range(self.grid['time'].shape[0] - 1)):
+            # get data for t = t
+            data_0 = self.variables(i)
+            data_1 = self.variables(i+1)
+            u0, v0 = data_0['u1'], data_0['v1']
+            u1, v1 = data_1['u1'], data_1['v1']
+            for j in tqdm.tqdm(range(int(framescale))):
+                u = (1.0 - (j/framescale)) * u0 + (j/framescale) * u1
+                v = (1.0 - (j/framescale)) * v0 + (j/framescale) * v1
+                # compute uv and mask with coordinate mask
+                uv = np.c_[u[~coordinate_mask], v[~coordinate_mask].ravel()]
+                F.values = uv.astype(F.values.dtype)
+                UV = F(X, Y)
+                RG = N(UV)
+                R, G = RG[..., 0], RG[..., 1]
+
+                # cells without a velocity
+                value_mask = np.logical_and(UV[..., 0] == 0.0, UV[..., 1] == 0.0)
+                # masked cells
+                B = np.zeros_like(R) + np.logical_and(self.canvas['is_grid'], ~value_mask)
+                RGB = np.dstack([R, G, B])
+                # store in filename
+                # TODO: generate with ffmpeg
+                plt.imsave('test_%06d.png' % (next(count),), RGB)
+        logger.debug("Animation generated")
 
     def variables(self, t):
         with netCDF4.Dataset(self.path) as ds:
@@ -247,8 +261,10 @@ class Delft3DMatlab(NetCDF):
         )
 
     @property
+    @functools.lru_cache()
     def canvas(self):
         """determine the rendering canvas and compute coordinates"""
+        logger.debug("Computing canvas properties")
         web2wgs84 = self.srs['web2wgs84']
         utm2web = self.srs['utm2web']
 
@@ -300,6 +316,7 @@ class Delft3DMatlab(NetCDF):
             uv
         )
         F.fill_value = 0.0
+        logger.debug("Canvas generated")
         return dict(
             X=X_web_canvas,
             Y=Y_web_canvas,
