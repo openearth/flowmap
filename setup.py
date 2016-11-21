@@ -12,7 +12,12 @@ with open('HISTORY.rst') as history_file:
 requirements = [
     'Click>=6.0',
     'NetCDF4',
-    'nefis'
+    'nefis',
+    'scipy',
+    'numpy',
+    'scikit-image',
+    'matplotlib',
+    'mako'
     # TODO: put package requirements here
 ]
 
