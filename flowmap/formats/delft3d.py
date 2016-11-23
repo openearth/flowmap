@@ -1,4 +1,3 @@
-# supported file formats
 import logging
 import functools
 import itertools
@@ -7,124 +6,18 @@ import tqdm
 import netCDF4
 import scipy.interpolate
 import numpy as np
-import mako.template
-import osgeo.osr
 import skimage.draw
 import skimage.morphology
 import matplotlib.pyplot as plt
 import matplotlib.colors
 
+# we need a separate transform that keeps masks
+from .formats import transform
+from .netcdf import NetCDF
+
 matplotlib.use('Agg')
 
 logger = logging.getLogger(__name__)
-
-# what to export on import from *, also used to get a list of available formats
-__all__ = ["Matroos", "get_format"]
-
-dump_tmpl = """
-% for var in grid:
-${var}
- - shape: ${grid[var].shape}
- - type:  ${grid[var].dtype}
- - min:   ${grid[var].min()}
- - max:   ${grid[var].max()}
-% endfor
-
-% for var in canvas:
-- ${var}: ${canvas[var]}
-% endfor
-
-
-"""
-
-
-def transform(x, y, transformation):
-    """transform coordinates, for n-d coordinates with masks"""
-    if len(x.shape) <= 2:
-        # curvilinear
-        mask = np.logical_or(x.mask, y.mask)
-    else:
-        # vertices
-        mask = np.logical_or(x.mask, y.mask).any(axis=-1)
-
-    xy = np.stack([x[~mask], y[~mask]], axis=-1)
-    # shape of the non masked contours
-    old_shape = x[~mask].shape
-    new_shape = np.prod(xy.shape[:-1]), +  xy.shape[-1],
-    xy = xy.reshape(new_shape)
-    x_t, y_t, _ = np.array(transformation.TransformPoints(xy)).T
-    x_t = x_t.reshape(old_shape)
-    y_t = y_t.reshape(old_shape)
-    X_t = np.ma.masked_all_like(x)
-    Y_t = np.ma.masked_all_like(y)
-    X_t[~mask] = x_t
-    Y_t[~mask] = y_t
-    return X_t, Y_t
-
-
-def get_format(dataset, **kwargs):
-    """get the format for the dataset"""
-    for format in [Matroos, Delft3DMatlab]:
-        ds = format(dataset, **kwargs)
-        if ds.validate():
-            logger.info("Found valid format %s for %s", format, dataset)
-            return format
-    return Matroos
-
-
-class NetCDF(object):
-    def __init__(self, path, src_epsg=4326, dst_epsg=28992, vmin=-0.5, vmax=0.5, framescale=3.0):
-        self.path = path
-        # source and destination epsg code
-        self.src_epsg = src_epsg
-        self.dst_epsg = dst_epsg
-        self.vmin = vmin
-        self.vmax = vmax
-        self.framescale = framescale
-        logger.debug("Object constructed with %s", vars(self))
-    @property
-    def srs(self):
-        # let's define the systems
-        src_srs = osgeo.osr.SpatialReference()
-        src_srs.ImportFromEPSG(self.src_epsg)
-
-        # google mercator
-        web_srs = osgeo.osr.SpatialReference()
-        web_srs.ImportFromEPSG(3857)
-
-        # Lat,Lon
-        wgs84 = osgeo.osr.SpatialReference()
-        wgs84.ImportFromEPSG(4326)
-
-        # local UTM
-        utm = osgeo.osr.SpatialReference()
-        utm.ImportFromEPSG(self.dst_epsg)
-
-        # and the translations between them
-        src2wgs84 = osgeo.osr.CoordinateTransformation(src_srs, wgs84)
-        web2wgs84 = osgeo.osr.CoordinateTransformation(web_srs, wgs84)
-        utm2wgs84 = osgeo.osr.CoordinateTransformation(utm, wgs84)
-        wgs842utm = osgeo.osr.CoordinateTransformation(wgs84, utm)
-        wgs842web = osgeo.osr.CoordinateTransformation(wgs84, web_srs)
-        utm2web = osgeo.osr.CoordinateTransformation(utm, web_srs)
-        src2utm = osgeo.osr.CoordinateTransformation(src_srs, utm)
-        src2web = osgeo.osr.CoordinateTransformation(src_srs, web_srs)
-
-        return dict(
-            src2wgs84=src2wgs84,
-            web2wgs84=web2wgs84,
-            utm2wgs84=utm2wgs84,
-            wgs842utm=wgs842utm,
-            wgs842web=wgs842web,
-            utm2web=utm2web,
-            src2utm=src2utm,
-            src2web=src2web
-        )
-
-    def dump(self):
-        tmpl = mako.template.Template(dump_tmpl)
-        text = tmpl.render(grid=self.grid, canvas=self.canvas)
-        return text
 
 
 class Delft3DMatlab(NetCDF):
@@ -355,54 +248,3 @@ class Delft3DMatlab(NetCDF):
             logger.warn("missing variables %s", expected - observed)
             return False
         return True
-
-
-class Matroos(NetCDF):
-    """FEWS Matroos format"""
-    @property
-    def grid(self):
-        """generate global variables"""
-        with netCDF4.Dataset(self.path) as ds:
-            times = netCDF4.num2date(ds.variables['time'][:],
-                                     ds.variables['time'].units)
-            analysis_time = netCDF4.num2date(ds.variables['analysis_time'][:],
-                                             ds.variables['analysis_time'].units)
-
-            lat = ds.variables['lat'][:]
-            lon = ds.variables['lon'][:]
-
-            # initial values (used to determine shapes and stuff, maybe remove if not used)
-            sep_0 = ds.variables['sep'][0]
-            u1_0 = ds.variables['velu'][0]
-            v1_0 = ds.variables['velv'][0]
-
-        variables = dict(
-            times=times,
-            analysis_time=analysis_time,
-            u1_0=u1_0,
-            v1_0=v1_0,
-            sep_0=sep_0,
-            lat=lat,
-            lon=lon
-        )
-        return variables
-
-    @property
-    def canvas(self):
-        return {}
-
-    def validate(self):
-        """validate a file"""
-        valid = True
-        with netCDF4.Dataset(self.path) as ds:
-            variables = ds.variables.keys()
-        for var in ("velu", "velv", "lat", "lon"):
-            if var not in variables:
-                logger.warn(
-                    "%s not found in variables of file %s",
-                    var,
-                    self.path
-                )
-                valid = False
-                return valid
-        return valid
