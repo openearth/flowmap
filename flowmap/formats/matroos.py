@@ -24,9 +24,10 @@ class Matroos(NetCDF):
     """FEWS Matroos format"""
 
     s = np.s_[200:300, 900:1000]
-    s = np.s_[:400, 800:1000]
+    s = np.s_[:, :]
 
     @property
+    @functools.lru_cache()
     def grid(self):
         """generate global variables"""
 
@@ -59,12 +60,12 @@ class Matroos(NetCDF):
 
         vertices = points2contours(lat, lon)
 
-        lat_c = np.ma.masked_all(lat.shape + (4, ))
         lon_c = np.ma.masked_all(lon.shape + (4, ))
+        lat_c = np.ma.masked_all(lat.shape + (4, ))
 
         for (i, j), vertex in vertices.items():
-            lat_c[i, j, :] = vertex[..., 0]
-            lon_c[i, j, :] = vertex[..., 1]
+            lon_c[i, j, :] = vertex[..., 0]
+            lat_c[i, j, :] = vertex[..., 1]
 
         X_utm_c, Y_utm_c = transform(lon_c, lat_c, wgs842utm)
 
@@ -87,7 +88,7 @@ class Matroos(NetCDF):
 
     @property
     @functools.lru_cache()
-    def canvas(self):
+    def canvas(self, bbox_wgs84=None):
         """determine the rendering canvas and compute coordinates"""
         logger.debug("Computing canvas properties")
         web2wgs84 = self.srs['web2wgs84']
@@ -127,6 +128,7 @@ class Matroos(NetCDF):
         for x_, y_ in zip(x_px_c, y_px_c):
             rr, cc = skimage.draw.polygon(y_, x_, is_grid.shape)
             is_grid[rr, cc] = True
+        plt.imsave('is_grid.png', is_grid)
         # want to dilate the grid a bit so colors will run through
         # is_grid = ~skimage.morphology.dilation(is_grid, skimage.morphology.square(5))
 
@@ -184,7 +186,7 @@ class Matroos(NetCDF):
                 # cells without a velocity
                 value_mask = np.logical_and(UV[..., 0] == 0.0, UV[..., 1] == 0.0)
                 # masked cells
-                B = np.zeros_like(R) + np.logical_and(self.canvas['is_grid'], ~value_mask)
+                B = np.zeros_like(R) + np.logical_and(~self.canvas['is_grid'], value_mask)
                 RGB = np.dstack([R, G, B])
                 # store in filename
                 # TODO: generate with ffmpeg
@@ -231,14 +233,19 @@ class Matroos(NetCDF):
             u1 = np.squeeze(ds.variables['velu'][:, i, j])
             v1 = np.squeeze(ds.variables['velv'][:, i, j])
             s1 = np.squeeze(ds.variables['sep'][:, i, j])
-        return pandas.DataFrame(
+
+        date = [str(x) for x in self.grid['time']]
+
+        df = pandas.DataFrame(
             data=dict(
+                date=date,
                 t=self.grid['time'],
                 u1=u1,
                 v1=v1,
                 s1=s1
             )
         )
+        return df
 
     def validate(self):
         """validate a file"""

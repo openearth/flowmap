@@ -97,8 +97,8 @@ def window(i, j, lat, lon):
     j_max = min(j+3, n)
     s = np.s_[i_min:i_max, j_min:j_max]
     views = []
-    for arr in [lat.copy(), lon.copy()]:
-        view = arr[s]
+    for arr in [lat, lon]:
+        view = arr[s].copy()
         if view.shape == (5, 5):
             views.append(view)
         else:
