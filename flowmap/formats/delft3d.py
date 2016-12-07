@@ -1,6 +1,7 @@
 import logging
 import functools
 import itertools
+import json
 
 import tqdm
 import netCDF4
@@ -59,8 +60,8 @@ class Delft3DMatlab(NetCDF):
         X_utm, Y_utm = transform(x, y, src2utm)
 
         # return
-        grid["Lon"] = Lon
-        grid["Lat"] = Lat
+        grid["lon"] = Lon
+        grid["lat"] = Lat
         grid["X_web"] = X_web
         grid["Y_web"] = Y_web
         grid["X_utm"] = X_utm
@@ -221,6 +222,31 @@ class Delft3DMatlab(NetCDF):
             mask=mask,
             F=F
         )
+
+    def extract_points(self, points, filename="timeseries.json"):
+        grid = self.grid
+        records = []
+        for p in points:
+            lon_i, lat_i = p
+            distance = np.sqrt((grid["lat"] - lat_i)**2 + (grid["lon"] - lon_i)**2)
+            i = np.argmin(distance)
+            i, j = np.unravel_index(i, distance.shape)
+            logger.info("distance %s", distance.shape)
+            logger.info("closest point for %s is %s, %s", p, i, j)
+            ts = self.timeseries(i, j)
+
+            # convert forth and back to json
+            data = json.loads(ts.to_json(orient="records"))
+            record = {
+                "lat": float(lat_i),
+                "lon": float(lon_i),
+                "i": int(i),
+                "j": int(j),
+                "data": data
+            }
+            records.append(record)
+        with open(filename, "w") as f:
+            json.dump(records, f, indent=2)
 
     @staticmethod
     def compute_distortion(x_utm, y_utm, utm2web):
