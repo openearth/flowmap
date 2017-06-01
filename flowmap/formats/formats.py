@@ -5,6 +5,7 @@ import functools
 import numpy as np
 import matplotlib.colors
 import tqdm
+import numba
 
 matplotlib.use('Agg')
 
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # what to export on import from *, also used to get a list of available formats
 
-
+@numba.jit
 def transform(x, y, transformation):
     """transform coordinates, for n-d coordinates with masks"""
     if len(x.shape) <= 2:

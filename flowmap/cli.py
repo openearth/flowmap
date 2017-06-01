@@ -1,13 +1,31 @@
 # -*- coding: utf-8 -*-
 import logging
 import json
+import datetime
 
+import numpy as np
 import click
+import uuid
 
 import flowmap.formats
 
+
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+
+def json_serializer(obj):
+    """JSON serializer for objects not serializable by default json code"""
+
+    if isinstance(obj, datetime.datetime):
+        serial = obj.isoformat()
+        return serial
+    if isinstance(obj, np.ndarray):
+        serial = obj.tolist()
+        return serial
+    if isinstance(obj, uuid.UUID):
+        return str(obj)
+    raise TypeError("Object %s of type %s not serializable " % (obj, type(obj)) )
 
 
 @click.group()
@@ -73,8 +91,9 @@ def generate(dataset, **kwargs):
     """Convert the dataset to a flow map."""
     klass = flowmap.formats.get_format(dataset, **kwargs)
     ds = klass(dataset, **kwargs)
+    # TODO: put in proper format.
     with open("model.json", "w") as f:
-        json.dump(ds.canvas['bbox_wgs84'], f)
+        json.dump(ds.meta(), f, default=json_serializer)
     ds.animate()
 
 
@@ -87,11 +106,15 @@ def generate(dataset, **kwargs):
     )
 )
 @click.option(
+    "--src_epsg",
+    type=int
+)
+@click.option(
     "-p",
     type=(float, float),
     multiple=True,
     required=True,
-    help="point (lon, lat)"
+    help="point (lat, lon)"
 )
 def timeseries(dataset, p, **kwargs):
     """Extract timeseries from the dataset."""

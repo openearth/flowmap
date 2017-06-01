@@ -17,7 +17,8 @@ requirements = [
     'numpy',
     'scikit-image',
     'matplotlib',
-    'mako'
+    'mako',
+    'geojson'
     # TODO: put package requirements here
 ]
 

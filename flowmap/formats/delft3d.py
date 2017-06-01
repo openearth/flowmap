@@ -3,6 +3,9 @@ import functools
 import itertools
 import json
 
+import pandas
+import json_encoder
+import geojson
 import tqdm
 import netCDF4
 import scipy.interpolate
@@ -23,7 +26,6 @@ logger = logging.getLogger(__name__)
 
 class Delft3DMatlab(NetCDF):
     """NetCDF converted with vs_nefis2nc"""
-
     @property
     @functools.lru_cache()
     def grid(self):
@@ -223,30 +225,45 @@ class Delft3DMatlab(NetCDF):
             F=F
         )
 
-    def extract_points(self, points, filename="timeseries.json"):
+    def timeseries(self, i, j):
+        with netCDF4.Dataset(self.path) as ds:
+            u1 = np.squeeze(ds.variables['velocity_x'][..., i, j])
+            v1 = np.squeeze(ds.variables['velocity_y'][..., i, j])
+            s1 = np.squeeze(ds.variables['waterlevel'][:, i, j])
+
+        date = [str(x) for x in self.grid['time']]
+
+        df = pandas.DataFrame(
+            data=dict(
+                date=date,
+                t=self.grid['time'],
+                u1=u1,
+                v1=v1,
+                s1=s1
+            )
+        )
+        return df
+
+    def extract_points(self, points, filename="points.json"):
         grid = self.grid
-        records = []
+        features = []
         for p in points:
-            lon_i, lat_i = p
+            lat_i, lon_i = p
             distance = np.sqrt((grid["lat"] - lat_i)**2 + (grid["lon"] - lon_i)**2)
             i = np.argmin(distance)
             i, j = np.unravel_index(i, distance.shape)
-            logger.info("distance %s", distance.shape)
+            logger.info("distance %s", distance.min())
             logger.info("closest point for %s is %s, %s", p, i, j)
-            ts = self.timeseries(i, j)
 
+            point = geojson.Point(coordinates=[float(lon_i), float(lat_i)])
+
+            ts = self.timeseries(i, j)
             # convert forth and back to json
-            data = json.loads(ts.to_json(orient="records"))
-            record = {
-                "lat": float(lat_i),
-                "lon": float(lon_i),
-                "i": int(i),
-                "j": int(j),
-                "data": data
-            }
-            records.append(record)
+            feature = geojson.Feature(id="{}_{}".format(i, j), geometry=point, properties={"series": ts})
+            features.append(feature)
+        feature_collection = geojson.FeatureCollection(features)
         with open(filename, "w") as f:
-            json.dump(records, f, indent=2)
+            json.dump(feature_collection, f, cls=json_encoder.Encoder)
 
     @staticmethod
     def compute_distortion(x_utm, y_utm, utm2web):

@@ -1,4 +1,9 @@
 import logging
+import hashlib
+import uuid
+import json
+import pathlib
+
 import osgeo.osr
 import mako.template
 
@@ -20,6 +25,16 @@ ${var}
 
 
 """
+
+
+def file2uuid(fname):
+    """read a file and return the unique uuid based on the file content"""
+    hash_md5 = hashlib.md5()
+    with open(fname, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    digest = hash_md5.digest()
+    return uuid.UUID(bytes=digest)
 
 
 class NetCDF(object):
@@ -76,3 +91,16 @@ class NetCDF(object):
         tmpl = mako.template.Template(dump_tmpl)
         text = tmpl.render(grid=self.grid, canvas=self.canvas)
         return text
+
+    def meta(self):
+        metadata = {
+            'metadata': {}
+        }
+
+        default_path = pathlib.Path('defaults.json')
+        if default_path.exists():
+            meta = json.load(default_path.open())
+            metadata.update(meta)
+        id_ = file2uuid(self.path)
+        metadata['id'] = id_
+        return metadata

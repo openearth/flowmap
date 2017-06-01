@@ -2,7 +2,9 @@ import logging
 import itertools
 import json
 import functools
+import pathlib
 
+import geojson
 import tqdm
 import pandas
 import netCDF4
@@ -190,7 +192,9 @@ class Matroos(NetCDF):
                 RGB = np.dstack([R, G, B])
                 # store in filename
                 # TODO: generate with ffmpeg
-                plt.imsave('test_%06d.png' % (next(count),), RGB)
+                path = pathlib.Path(self.path)
+                filename = path.parent / (path.stem + '_%06d.png' % (next(count), ))
+                plt.imsave(str(filename), RGB)
 
         return
 
@@ -198,7 +202,7 @@ class Matroos(NetCDF):
         grid = self.grid
         records = []
         for p in points:
-            lon_i, lat_i = p
+            lat_i, lon_i = p
             distance = np.sqrt((grid["lat"] - lat_i)**2 + (grid["lon"] - lon_i)**2)
             i = np.argmin(distance)
             i, j = np.unravel_index(i, distance.shape)
@@ -223,9 +227,11 @@ class Matroos(NetCDF):
         with netCDF4.Dataset(self.path) as ds:
             u1 = np.squeeze(ds.variables['velu'][t][self.s])
             v1 = np.squeeze(ds.variables['velv'][t][self.s])
+            sep = np.squeeze(ds.variables['sep'][t][self.s])
         return dict(
             u1=u1,
-            v1=v1
+            v1=v1,
+            sep=sep
         )
 
     def timeseries(self, i, j):
@@ -262,3 +268,17 @@ class Matroos(NetCDF):
                 valid = False
                 return valid
         return valid
+
+    def meta(self):
+        metadata = super().meta()
+        llur_wgs84 = self.canvas['bbox_wgs84']
+        extent = dict(
+            sw=llur_wgs84[:2],
+            ne=llur_wgs84[3:5],
+            time=(self.grid['time'][0], self.grid['time'][-1])
+
+        )
+        # make sure we have an extent
+        metadata['extent'] = metadata.get('extent', {})
+        metadata['extent'].update(extent)
+        return metadata
