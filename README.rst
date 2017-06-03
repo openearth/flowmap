@@ -25,6 +25,14 @@ Command line utility to transform model output into a flowmap that can be used f
 * Documentation: https://flowmap.readthedocs.io.
 
 
+Scripts
+=======
+
+Scripts that generate flowmaps for specific models:
+
+- matroos_flowmap.sh (download model results for DCSM model and transform them to a flowmap)
+
+
 Features
 --------
 
@@ -37,4 +45,3 @@ This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypack
 
 .. _Cookiecutter: https://github.com/audreyr/cookiecutter
 .. _`audreyr/cookiecutter-pypackage`: https://github.com/audreyr/cookiecutter-pypackage
-
