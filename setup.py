@@ -28,7 +28,7 @@ test_requirements = [
 
 setup(
     name='flowmap',
-    version='0.1.0',
+    version='0.1.1',
     description="Command line utility to transform model output into a flowmap that can be used for games or gpu-based visualizations.",
     long_description=readme + '\n\n' + history,
     author="Fedor Baart",
@@ -44,6 +44,9 @@ setup(
             'flowmap=flowmap.cli:cli'
         ]
     },
+    scripts=[
+        'bin/matroos_flowmap'
+    ],
     include_package_data=True,
     install_requires=requirements,
     license="GNU General Public License v3",
