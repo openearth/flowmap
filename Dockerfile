@@ -7,7 +7,7 @@ RUN \
     echo "deb http://httpredir.debian.org/debian jessie-backports main non-free" >> /etc/apt/sources.list && \
     echo "deb-src http://httpredir.debian.org/debian jessie-backports main non-free" >> /etc/apt/sources.list && \
     apt-get update --fix-missing && \
-    apt-get install -y ffmpeg wget
+    apt-get install -y ffmpeg wget unzip
 # switch to python 3.5 (no gdal in 3.6)
 RUN conda install -y python=3.5
 RUN conda install -y gdal jpeg=8d
