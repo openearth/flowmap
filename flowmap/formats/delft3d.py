@@ -4,7 +4,6 @@ import itertools
 import json
 
 import pandas
-import json_encoder
 import geojson
 import tqdm
 import netCDF4
@@ -18,6 +17,7 @@ import matplotlib.colors
 # we need a separate transform that keeps masks
 from .formats import transform
 from .netcdf import NetCDF
+from .json_encoder import Encoder
 
 matplotlib.use('Agg')
 
@@ -263,7 +263,7 @@ class Delft3DMatlab(NetCDF):
             features.append(feature)
         feature_collection = geojson.FeatureCollection(features)
         with open(filename, "w") as f:
-            json.dump(feature_collection, f, cls=json_encoder.Encoder)
+            json.dump(feature_collection, f, cls=Encoder)
 
     @staticmethod
     def compute_distortion(x_utm, y_utm, utm2web):
