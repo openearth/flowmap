@@ -17,7 +17,7 @@ import matplotlib.colors
 # we need a separate transform that keeps masks
 from .formats import transform
 from .netcdf import NetCDF
-from .json_encoder import Encoder
+from .json_encoder import RegistryEncoder as Encoder
 
 matplotlib.use('Agg')
 
