@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 with open('README.rst') as readme_file:
     readme = readme_file.read()
@@ -33,11 +33,10 @@ setup(
     author="Fedor Baart",
     author_email='fedor.baart@deltares.nl',
     url='https://github.com/SiggyF/flowmap',
-    packages=[
-        'flowmap',
-    ],
-    package_dir={'flowmap':
-                 'flowmap'},
+    packages=find_packages(),
+    package_dir={
+        'flowmap': 'flowmap'
+    },
     entry_points={
         'console_scripts': [
             'flowmap=flowmap.cli:cli'
