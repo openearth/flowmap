@@ -17,7 +17,8 @@ requirements = [
     'scikit-image',
     'matplotlib',
     'mako',
-    'geojson'
+    'geojson',
+    'tqdm'
     # TODO: put package requirements here
 ]
 
