@@ -13,7 +13,7 @@ import matplotlib.colors
 import skimage.draw
 import scipy.interpolate
 
-from .formats import transform, points2contours
+from .formats import transform, points2contours, contours2vertices
 from .netcdf import NetCDF
 
 import matplotlib.pyplot as plt
@@ -48,28 +48,27 @@ class Matroos(NetCDF):
                 ds.variables['analysis_time'][:],
                 ds.variables['analysis_time'].units
             )
-
+            # these lat,lon variables are actually contours of the original cells
             lat = ds.variables['lat'][self.s]
             lon = ds.variables['lon'][self.s]
 
             # initial values (used to determine shapes and stuff, maybe remove if not used)
-            sep_0 = ds.variables['sep'][0][self.s]
-            u1_0 = ds.variables['velu'][0][self.s]
-            v1_0 = ds.variables['velv'][0][self.s]
+            sep_0 = ds.variables['sep'][0][self.s][1:, 1:]
+            u1_0 = ds.variables['velu'][0][self.s][1:, 1:]
+            v1_0 = ds.variables['velv'][0][self.s][1:, 1:]
 
-        X_web, Y_web = transform(lon, lat, src2web)
-        X_utm, Y_utm = transform(lon, lat, src2utm)
+        vertices = contours2vertices(lat, lon)
 
-        vertices = points2contours(lat, lon)
-
-        lon_c = np.ma.masked_all(lon.shape + (4, ))
-        lat_c = np.ma.masked_all(lat.shape + (4, ))
-
-        for (i, j), vertex in vertices.items():
-            lon_c[i, j, :] = vertex[..., 0]
-            lat_c[i, j, :] = vertex[..., 1]
-
+        logger.info("computed vertices of shape %s", vertices.shape)
+        lon_c = vertices[:, :, 0]
+        lat_c = vertices[:, :, 1]
         X_utm_c, Y_utm_c = transform(lon_c, lat_c, wgs842utm)
+
+        # coordinates are cell centers
+        X_src = lon_c.mean(axis=1).reshape(u1_0.shape)
+        Y_src = lat_c.mean(axis=1).reshape(u1_0.shape)
+        X_web, Y_web = transform(X_src, Y_src, src2web)
+        X_utm, Y_utm = transform(X_src, Y_src, src2utm)
 
         variables = dict(
             time=time,
@@ -117,17 +116,15 @@ class Matroos(NetCDF):
         X_web_c, Y_web_c = transform(grid['X_utm_c'], grid['Y_utm_c'], utm2web)
 
         mask = np.logical_or(X_web_c.mask.any(axis=-1), Y_web_c.mask.any(axis=-1))
-        old_shape = X_web_c.shape
-        new_shape = np.prod(old_shape[:2]), + old_shape[2],
 
-        x_web_c = X_web_c.reshape(new_shape)[~mask.flatten()]
-        y_web_c = Y_web_c.reshape(new_shape)[~mask.flatten()]
+        x_web_c = X_web_c[~mask]
+        y_web_c = Y_web_c[~mask]
 
         x_px_c = nx * (x_web_c - ll_web[0]) / (ur_web[0] - ll_web[0])
         y_px_c = ny * (y_web_c - ll_web[1]) / (ur_web[1] - ll_web[1])
 
         is_grid = np.zeros((ny, nx), dtype='bool')
-        for x_, y_ in zip(x_px_c, y_px_c):
+        for x_, y_ in tqdm.tqdm(zip(x_px_c.filled(), y_px_c.filled()), desc="drawing is_grid", total=x_px_c.shape[0]):
             rr, cc = skimage.draw.polygon(y_, x_, is_grid.shape)
             is_grid[rr, cc] = True
         plt.imsave('is_grid.png', is_grid)
@@ -225,9 +222,11 @@ class Matroos(NetCDF):
 
     def variables(self, t):
         with netCDF4.Dataset(self.path) as ds:
-            u1 = np.squeeze(ds.variables['velu'][t][self.s])
-            v1 = np.squeeze(ds.variables['velv'][t][self.s])
-            sep = np.squeeze(ds.variables['sep'][t][self.s])
+            # velocities of first row and column are not used
+            # TODO: this does not quite match up....
+            u1 = np.squeeze(ds.variables['velu'][t][self.s][1:, 1:])
+            v1 = np.squeeze(ds.variables['velv'][t][self.s][1:, 1:])
+            sep = np.squeeze(ds.variables['sep'][t][self.s][1:, 1:])
         return dict(
             u1=u1,
             v1=v1,

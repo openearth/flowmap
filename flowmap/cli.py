@@ -91,10 +91,22 @@ def generate(dataset, **kwargs):
     """Convert the dataset to a flow map."""
     klass = flowmap.formats.get_format(dataset, **kwargs)
     ds = klass(dataset, **kwargs)
-    # TODO: put in proper format.
+    ds.animate()
+
+
+@cli.command()
+@click.argument(
+    "dataset",
+    type=click.Path(
+        exists=True,
+        resolve_path=True
+    )
+)
+def meta(dataset, **kwargs):
+    klass = flowmap.formats.get_format(dataset, **kwargs)
+    ds = klass(dataset, **kwargs)
     with open("model.json", "w") as f:
         json.dump(ds.meta(), f, default=json_serializer)
-    ds.animate()
 
 
 @cli.command()

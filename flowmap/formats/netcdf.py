@@ -30,11 +30,15 @@ ${var}
 def file2uuid(fname):
     """read a file and return the unique uuid based on the file content"""
     hash_md5 = hashlib.md5()
+    logger.info("computing uuid based on md5sum")
     with open(fname, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
             hash_md5.update(chunk)
     digest = hash_md5.digest()
-    return uuid.UUID(bytes=digest)
+    uuid_ = uuid.UUID(bytes=digest)
+    logger.info("uuid: %s", uuid_)
+
+    return uuid_
 
 
 class NetCDF(object):

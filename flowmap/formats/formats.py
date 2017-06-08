@@ -5,7 +5,6 @@ import functools
 import numpy as np
 import matplotlib.colors
 import tqdm
-import numba
 
 matplotlib.use('Agg')
 
@@ -13,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 # what to export on import from *, also used to get a list of available formats
 
-@numba.jit
+
 def transform(x, y, transformation):
     """transform coordinates, for n-d coordinates with masks"""
     if len(x.shape) <= 2:
@@ -27,8 +26,10 @@ def transform(x, y, transformation):
     # shape of the non masked contours
     old_shape = x[~mask].shape
     new_shape = np.prod(xy.shape[:-1]), +  xy.shape[-1],
-    xy = xy.reshape(new_shape)
-    x_t, y_t, _ = np.array(transformation.TransformPoints(xy)).T
+    # make sure you don't use a masked array (very slooow)
+    xy = xy.reshape(new_shape).filled()
+    xy_t = transformation.TransformPoints(xy)
+    x_t, y_t, _ = np.array(xy_t).T
     x_t = x_t.reshape(old_shape)
     y_t = y_t.reshape(old_shape)
     X_t = np.ma.masked_all_like(x)
@@ -181,4 +182,21 @@ def points2contours(lat, lon):
         verts = ij2verts(i, j, lat, lon, rules)
         if len(verts) and verts.shape == (4, 2, 4):
             vertices[(i, j)] = verts.mean(axis=-1)
+    return vertices
+
+
+def contours2vertices(lat, lon):
+    """convert curvilinear contour grid defined by lat and lon to cell contours"""
+    # lookup cell borders ccw
+    ul = np.ma.vstack([lon[:-1, :-1].ravel(), lat[:-1, :-1].ravel()]).T[:, np.newaxis, :]
+    ur = np.ma.vstack([lon[:-1, 1:].ravel(), lat[:-1, 1:].ravel()]).T[:, np.newaxis, :]
+    lr = np.ma.vstack([lon[1:, 1:].ravel(), lat[1:, 1:].ravel()]).T[:, np.newaxis, :]
+    ll = np.ma.vstack([lon[1:, :-1].ravel(), lat[1:, :-1].ravel()]).T[:, np.newaxis, :]
+
+    vertices = np.ma.hstack([ul, ur, lr, ll])
+    # is any of the coords missing
+    mask = vertices.mask.any(axis=(1, 2))
+    # reset mask
+    vertices.mask[:] = False
+    vertices.mask[mask] = True
     return vertices
