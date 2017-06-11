@@ -9,8 +9,10 @@ RUN \
     apt-get update --fix-missing && \
     apt-get install -y ffmpeg wget unzip
 # switch to python 3.5 (no gdal in 3.6)
-RUN conda create -y -n py35 python=3.5 libgdal gdal jpeg=8d netcdf4 matplotlib scikit-image tqdm cython pillow click
+RUN conda create -y -n py35 python=3.5 libgdal gdal jpeg=8d netcdf4 matplotlib scikit-image tqdm cython pillow click pandas
+# install flowmap in the new environment
 RUN /opt/conda/envs/py35/bin/pip install flowmap
 ENV PATH /opt/conda/bin:$PATH
+# not sure what this is
 ENTRYPOINT [ "/usr/bin/tini", "--" ]
 CMD [ "/bin/bash" ]
