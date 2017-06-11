@@ -185,7 +185,7 @@ class Matroos(NetCDF):
                 # cells without a velocity
                 value_mask = np.logical_and(UV[..., 0] == 0.0, UV[..., 1] == 0.0)
                 # masked cells
-                B = np.zeros_like(R) + np.logical_and(~self.canvas['is_grid'], value_mask)
+                B = np.zeros_like(R) + np.logical_or(~self.canvas['is_grid'], value_mask)
                 RGB = np.dstack([R, G, B])
                 # store in filename
                 # TODO: generate with ffmpeg
