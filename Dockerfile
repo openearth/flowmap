@@ -1,4 +1,4 @@
-FROM continuumio/anaconda3
+FROM continuumio/miniconda3
 MAINTAINER Fedor Baart <fedor.baart@deltares.nl>
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 # update system and install wget
@@ -9,9 +9,8 @@ RUN \
     apt-get update --fix-missing && \
     apt-get install -y ffmpeg wget unzip
 # switch to python 3.5 (no gdal in 3.6)
-RUN conda install -y python=3.5
-RUN conda install -y libgdal gdal jpeg=8d
-RUN pip install flowmap
+RUN conda create -y -n py35 python=3.5 libgdal gdal jpeg=8d netcdf4 matplotlib scikit-image tqdm cython pillow click
+RUN /opt/conda/envs/py35/bin/pip install flowmap
 ENV PATH /opt/conda/bin:$PATH
 ENTRYPOINT [ "/usr/bin/tini", "--" ]
 CMD [ "/bin/bash" ]
