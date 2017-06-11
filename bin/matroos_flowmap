@@ -4,6 +4,7 @@
 # expects wget, ffmpeg and the flowmap command to be available.
 
 # Fix a bug in anaconda gdal
+source activate py35
 export GDAL_DATA=$(gdal-config --datadir)
 
 filename=$(date +%Y%m%d%H)_dcsm
