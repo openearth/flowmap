@@ -15,4 +15,4 @@ RUN /opt/conda/envs/py35/bin/pip install flowmap
 ENV PATH /opt/conda/bin:$PATH
 # not sure what this is
 ENTRYPOINT [ "/usr/bin/tini", "--" ]
-CMD [ "/bin/bash" ]
+CMD [ "/opt/conda/envs/py35/bin/matroos_flowmap" ]
