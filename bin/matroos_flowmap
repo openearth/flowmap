@@ -3,6 +3,9 @@
 # Generate a flowmap for matroos
 # expects wget, ffmpeg and the flowmap command to be available.
 
+# Fix a bug in anaconda gdal
+export GDAL_DATA=$(gdal-config --datadir)
+
 filename=$(date +%Y%m%d%H)_dcsm
 # get latest netcdf file
 wget -O $filename.zip -c 'http://noos.matroos.rws.nl/direct/get_netcdf.php?database=maps2d&source=dcsm_v6_kf_hirlam&zip=1'

@@ -10,7 +10,7 @@ RUN \
     apt-get install -y ffmpeg wget unzip
 # switch to python 3.5 (no gdal in 3.6)
 RUN conda install -y python=3.5
-RUN conda install -y gdal jpeg=8d
+RUN conda install -y libgdal gdal jpeg=8d
 RUN pip install flowmap
 ENV PATH /opt/conda/bin:$PATH
 ENTRYPOINT [ "/usr/bin/tini", "--" ]
