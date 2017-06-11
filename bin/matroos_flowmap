@@ -16,6 +16,7 @@ flowmap generate $extracted --src_epsg 4326 --dst_epsg 25831 --vmin -1.5 --vmax 
 ffmpeg -i ${extracted_base}_%06d.png -b:v 1M -an -pix_fmt yuv420p -r 10 ${extracted_base}.mp4
 # cleanup
 rm ${extracted_base}_*.png
+aws s3 cp ${extracted_base}.mp4 s3://model-inventory
 
 filename=$(date +%Y%m%d%H)_zuno
 wget -O $filename.zip -c 'http://noos.matroos.rws.nl/direct/get_netcdf.php?database=maps2d&source=dcsmv6_zunov4_zuno_kf_hirlam&zip=1'
@@ -29,3 +30,4 @@ flowmap generate $extracted --src_epsg 4326 --dst_epsg 25831 --vmin -1.5 --vmax 
 ffmpeg -i ${extracted_base}_%06d.png -b:v 1M -an -pix_fmt yuv420p -r 10 ${extracted_base}.mp4
 # cleanup
 rm ${extracted_base}_*.png
+aws s3 cp ${extracted_base}.mp4 s3://model-inventory
