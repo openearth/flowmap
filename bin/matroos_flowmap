@@ -1,5 +1,28 @@
 #!/bin/bash
 
+
+usage() { echo "Usage: $0 [-k keeps data ]" 1>&2; exit 1; }
+
+while getopts "k" o; do
+    case "${o}" in
+        k)
+            k="true"
+            ;;
+        h)
+            usage
+            ;;
+        *)
+            usage
+            ;;
+    esac
+done
+
+if [ -n "$k" ]
+then
+    echo "keeping data"
+fi
+
+shift $((OPTIND-1))
 # Generate a flowmap for matroos
 # expects wget, ffmpeg and the flowmap command to be available.
 
@@ -22,18 +45,30 @@ for model in ${!urls[@]}; do
     # extract zip file
     unzip -o $filename.zip
     # cleanup the zip file
-    rm $filename.zip
+    if [ -z "$k" ]
+    then
+        rm $filename.zip
+    fi
     extracted_base=$(basename -s .nc $extracted)
 
     # generate the flowmap
     flowmap generate $extracted --src_epsg 4326 --dst_epsg 25831 --vmin -1.5 --vmax 1.5 --framescale 20
     # we're done with the netcdf file, cleanup
-    rm $extracted
+    if [ -z "$k" ]
+    then
+        rm $extracted
+    fi
     # convert to movie
     ffmpeg -i ${extracted_base}_%06d.png -b:v 1M -an -pix_fmt yuv420p -r 10 ${extracted_base}.mp4
     # cleanup images
-    rm ${extracted_base}_*.png
+    if [ -z "$k" ]
+    then
+        rm ${extracted_base}_*.png
+    fi
     aws s3 cp ${extracted_base}.mp4 s3://model-inventory/movies/${extracted_base}.mp4
     # cleanup movie
-    rm ${extracted_base}.mp4
+    if [ -z "$k" ]
+    then
+       rm ${extracted_base}.mp4
+    fi
 done
