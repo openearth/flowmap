@@ -30,6 +30,13 @@ shift $((OPTIND-1))
 source activate py35
 export GDAL_DATA=$(gdal-config --datadir)
 
+# Mount EFS if set
+if [ -n $EFS ]
+then
+    mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=15,retrans=2 ${EFS}:/ /tmp/efs
+    cd /tmp/efs
+fi
+
 # define models
 declare -A urls
 urls[dcsm]='http://noos.matroos.rws.nl/direct/get_netcdf.php?database=maps2d&source=dcsm_v6_kf_hirlam&zip=1'
