@@ -172,22 +172,11 @@ class Matroos(NetCDF):
             u1, v1 = data_1['u1'], data_1['v1']
 
             # points for which uv
-            uv0_mask = np.logical_or.reduce([
-                coordinate_mask,
-                u0.mask,
-                v0.mask
-            ])
-            uv1_mask = np.logical_or.reduce([
-                coordinate_mask,
-                u1.mask,
-                v1.mask
-            ])
-
-            uv0 = np.c_[u0[~uv0_mask], v0[~uv0_mask].ravel()]
+            uv0 = np.c_[u0[~coordinate_mask].filled(0), v0[~coordinate_mask].filled(0).ravel()]
             F.values = uv0.astype(F.values.dtype)
             UV0 = F(X, Y)
 
-            uv1 = np.c_[u1[~uv1_mask], v1[~uv1_mask].ravel()]
+            uv1 = np.c_[u1[~coordinate_mask].filled(0), v1[~coordinate_mask].filled(0).ravel()]
             F.values = uv1.astype(F.values.dtype)
             UV1 = F(X, Y)
 
