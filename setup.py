@@ -28,7 +28,7 @@ test_requirements = [
 
 setup(
     name='flowmap',
-    version='0.2.15',
+    version='0.2.16',
     description="Command line utility to transform model output into a flowmap that can be used for games or gpu-based visualizations.",
     long_description=readme + '\n\n' + history,
     author="Fedor Baart",
