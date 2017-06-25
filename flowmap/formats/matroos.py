@@ -182,7 +182,9 @@ class Matroos(NetCDF):
 
                 # cells without a velocity
                 value_mask = np.logical_and(UV[..., 0] == 0.0, UV[..., 1] == 0.0)
-                # masked cells
+                # clear color in non grid cells
+                R[~self.canvas['is_grid']] = 0.5
+                G[~self.canvas['is_grid']] = 0.5
                 B = np.zeros_like(R) + np.logical_or(~self.canvas['is_grid'], value_mask)
                 RGB = np.dstack([R, G, B])
                 # store in filename
