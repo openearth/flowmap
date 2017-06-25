@@ -4,6 +4,7 @@ import uuid
 import json
 import pathlib
 
+import netCDF4
 import osgeo.osr
 import mako.template
 
@@ -100,11 +101,21 @@ class NetCDF(object):
         metadata = {
             'metadata': {}
         }
-
+        # get metadata from netCDF file
+        with netCDF4.Dataset(self.path) as ds:
+            attrs = ds.ncattrs()
+            # get all the attributes from the dataset
+            metadata['metadata'].update({
+                attr: getattr(ds, attr)
+                for attr
+                in attrs
+            })
+        # get metadata from default
         default_path = pathlib.Path('defaults.json')
         if default_path.exists():
             meta = json.load(default_path.open())
             metadata.update(meta)
+        # compute uuid
         id_ = file2uuid(self.path)
         metadata['id'] = id_
         return metadata

@@ -2,6 +2,7 @@
 import logging
 import json
 import datetime
+import pathlib
 
 import numpy as np
 import click
@@ -105,8 +106,11 @@ def generate(dataset, **kwargs):
 def meta(dataset, **kwargs):
     klass = flowmap.formats.get_format(dataset, **kwargs)
     ds = klass(dataset, **kwargs)
-    with open("model.json", "w") as f:
-        json.dump(ds.meta(), f, default=json_serializer)
+    meta = ds.meta()
+    path = pathlib.Path(dataset)
+    path_name = str(path.with_suffix('.json'))
+    with open(path_name, "w") as f:
+        json.dump(meta, f, default=json_serializer)
 
 
 @cli.command()

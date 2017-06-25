@@ -127,7 +127,6 @@ class Matroos(NetCDF):
         for x_, y_ in tqdm.tqdm(zip(x_px_c.filled(), y_px_c.filled()), desc="drawing is_grid", total=x_px_c.shape[0]):
             rr, cc = skimage.draw.polygon(y_, x_, is_grid.shape)
             is_grid[rr, cc] = True
-        plt.imsave('is_grid.png', is_grid)
         # want to dilate the grid a bit so colors will run through
         # is_grid = ~skimage.morphology.dilation(is_grid, skimage.morphology.square(5))
 
@@ -270,6 +269,7 @@ class Matroos(NetCDF):
 
     def meta(self):
         metadata = super().meta()
+        metadata['metadata']['format'] = str(self)
         llur_wgs84 = self.canvas['bbox_wgs84']
         extent = dict(
             sw=llur_wgs84[:2],
