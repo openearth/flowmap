@@ -56,7 +56,9 @@ provider:
 
 functions:
   submit:
-    handler: handler.submit
+    handler: submit.submit
+  index:
+    handler: models.index
 
 #    The following are a few example events you can configure
 #    NOTE: Please make sure to change your handler code to work with those events
