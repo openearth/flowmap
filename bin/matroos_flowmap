@@ -58,6 +58,8 @@ for model in ${!urls[@]}; do
     fi
     extracted_base=$(basename -s .nc $extracted)
 
+    # generate metadata
+    flowmap meta $extracted
     # generate the flowmap
     flowmap generate $extracted --src_epsg 4326 --dst_epsg 25831 --vmin -1.5 --vmax 1.5 --framescale 20
     # we're done with the netcdf file, cleanup
@@ -72,10 +74,14 @@ for model in ${!urls[@]}; do
     then
         rm ${extracted_base}_*.png
     fi
+
+    # upload to s3 repository
     aws s3 cp ${extracted_base}.mp4 s3://model-inventory/movies/${extracted_base}.mp4
-    # cleanup movie
+    aws s3 cp ${extracted_base}.json s3://model-inventory/meta/${extracted_base}.json
+    # cleanup movie and metadata
     if [ -z "$k" ]
     then
-       rm ${extracted_base}.mp4
+        rm ${extracted_base}.mp4
+        rm ${extracted_base}.json
     fi
 done
