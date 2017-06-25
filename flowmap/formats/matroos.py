@@ -170,22 +170,42 @@ class Matroos(NetCDF):
             data_1 = self.variables(i+1)
             u0, v0 = data_0['u1'], data_0['v1']
             u1, v1 = data_1['u1'], data_1['v1']
+
+            uv0 = np.c_[u0[~coordinate_mask], v0[~coordinate_mask].ravel()]
+            F.values = uv0.astype(F.values.dtype)
+            UV0 = F(X, Y)
+
+            uv1 = np.c_[u1[~coordinate_mask], v1[~coordinate_mask].ravel()]
+            F.values = uv1.astype(F.values.dtype)
+            UV1 = F(X, Y)
+
+            # cells without a velocity
+            value_mask = np.logical_or(
+                np.logical_and(
+                    UV0[..., 0] == 0.0,
+                    UV0[..., 1] == 0.0
+                ),
+                np.logical_and(
+                    UV1[..., 0] == 0.0,
+                    UV1[..., 1] == 0.0
+                )
+            )
+            mask = np.logical_or(
+                ~self.canvas['is_grid'],
+                value_mask
+            )
+
             for j in tqdm.tqdm(range(int(framescale))):
-                u = (1.0 - (j/framescale)) * u0 + (j/framescale) * u1
-                v = (1.0 - (j/framescale)) * v0 + (j/framescale) * v1
+                UV = (1.0 - (j/framescale)) * UV0 + (j/framescale) * UV1
+                # set U and V to 0
+                UV[mask, 0] = 0.0
+                UV[mask, 1] = 0.0
+
                 # compute uv and mask with coordinate mask
-                uv = np.c_[u[~coordinate_mask], v[~coordinate_mask].ravel()]
-                F.values = uv.astype(F.values.dtype)
-                UV = F(X, Y)
                 RG = N(UV)
                 R, G = RG[..., 0], RG[..., 1]
 
-                # cells without a velocity
-                value_mask = np.logical_and(UV[..., 0] == 0.0, UV[..., 1] == 0.0)
-                # clear color in non grid cells
-                R[~self.canvas['is_grid']] = 0.5
-                G[~self.canvas['is_grid']] = 0.5
-                B = np.zeros_like(R) + np.logical_or(~self.canvas['is_grid'], value_mask)
+                B = np.zeros_like(R) + mask
                 RGB = np.dstack([R, G, B])
                 # store in filename
                 # TODO: generate with ffmpeg
