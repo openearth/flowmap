@@ -171,11 +171,23 @@ class Matroos(NetCDF):
             u0, v0 = data_0['u1'], data_0['v1']
             u1, v1 = data_1['u1'], data_1['v1']
 
-            uv0 = np.c_[u0[~coordinate_mask], v0[~coordinate_mask].ravel()]
+            # points for which uv
+            uv0_mask = np.logical_or.reduce([
+                coordinate_mask,
+                u0.mask,
+                v0.mask
+            ])
+            uv1_mask = np.logical_or.reduce([
+                coordinate_mask,
+                u1.mask,
+                v1.mask
+            ])
+
+            uv0 = np.c_[u0[~uv0_mask], v0[~uv0_mask].ravel()]
             F.values = uv0.astype(F.values.dtype)
             UV0 = F(X, Y)
 
-            uv1 = np.c_[u1[~coordinate_mask], v1[~coordinate_mask].ravel()]
+            uv1 = np.c_[u1[~uv1_mask], v1[~uv1_mask].ravel()]
             F.values = uv1.astype(F.values.dtype)
             UV1 = F(X, Y)
 
@@ -190,10 +202,10 @@ class Matroos(NetCDF):
                     UV1[..., 1] == 0.0
                 )
             )
-            mask = np.logical_or(
-                ~self.canvas['is_grid'],
-                value_mask
-            )
+            mask = np.logical_or.reduce([
+                ~self.canvas['is_grid']
+            ])
+            # value_mask
 
             for j in tqdm.tqdm(range(int(framescale))):
                 UV = (1.0 - (j/framescale)) * UV0 + (j/framescale) * UV1
