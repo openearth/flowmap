@@ -25,7 +25,6 @@ logger = logging.getLogger(__name__)
 class Matroos(NetCDF):
     """FEWS Matroos format"""
 
-    s = np.s_[200:300, 900:1000]
     s = np.s_[:, :]
 
     @property
@@ -280,4 +279,17 @@ class Matroos(NetCDF):
         # make sure we have an extent
         metadata['extent'] = metadata.get('extent', {})
         metadata['extent'].update(extent)
+
+        src = pathlib.Path(self.path).with_suffix('.mp4')
+        uv = {
+            "src": str(src),
+            "type": "video/mp4",
+            "tag": "video",
+            "width": self.canvas['nx'],
+            "height": self.canvas['ny']
+        }
+        metadata['uv'] = uv
+        metadata['uniforms'] = {
+            "flipv": true
+        }
         return metadata
