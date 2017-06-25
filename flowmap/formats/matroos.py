@@ -280,7 +280,8 @@ class Matroos(NetCDF):
         metadata['extent'] = metadata.get('extent', {})
         metadata['extent'].update(extent)
 
-        src = pathlib.Path(self.path).with_suffix('.mp4')
+        path = pathlib.Path(self.path)
+        src = path.with_suffix('.mp4').relative_to(path.parent)
         uv = {
             "src": str(src),
             "type": "video/mp4",
@@ -290,6 +291,6 @@ class Matroos(NetCDF):
         }
         metadata['uv'] = uv
         metadata['uniforms'] = {
-            "flipv": true
+            "flipv": True
         }
         return metadata
