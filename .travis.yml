@@ -10,6 +10,9 @@ env:
 
 # command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
 install: pip install -r requirements_dev.txt
+before_install:
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq libatlas-dev libatlas-base-dev liblapack-dev gfortran libnetcdf-dev
 
 # command to run tests, e.g. python setup.py test
 script: tox -e ${TOXENV}
