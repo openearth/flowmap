@@ -13,7 +13,7 @@ env:
   - TOXENV=pypy
 
 # command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
-install: pip install -U tox
+install: pip install -r requirements_dev.txt
 
 # command to run tests, e.g. python setup.py test
 script: tox -e ${TOXENV}
@@ -28,5 +28,5 @@ deploy:
     secure: PLEASE_REPLACE_ME
   on:
     tags: true
-    repo: SiggyF/flowmap
+    repo: openearth/flowmap
     condition: $TOXENV == py27
