@@ -18,7 +18,8 @@ requirements = [
     'matplotlib',
     'mako',
     'geojson',
-    'tqdm'
+    'tqdm',
+    'pandas'
     # TODO: put package requirements here
 ]
 
