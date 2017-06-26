@@ -19,7 +19,7 @@ before_install:
   # Required to install Pillow
   - sudo apt-get -q -y install build-essential
   # GIS requirements.
-  - sudo apt-get -q -y install binutils gdal-bin libproj-dev libgeos-c1 libnetcdf-dev libgdal-dev
+  - sudo apt-get -q -y install binutils gdal-bin libproj-dev libgeos-c1 libnetcdf-dev libgdal-dev python3-gdal python3-numpy
 # command to run tests, e.g. python setup.py test
 script: tox -e ${TOXENV}
 
