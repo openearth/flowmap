@@ -6,15 +6,15 @@ Flowmap generator
 .. image:: https://img.shields.io/pypi/v/flowmap.svg
         :target: https://pypi.python.org/pypi/flowmap
 
-.. image:: https://img.shields.io/travis/SiggyF/flowmap.svg
-        :target: https://travis-ci.org/SiggyF/flowmap
+.. image:: https://img.shields.io/travis/openearth/flowmap.svg
+        :target: https://travis-ci.org/openearth/flowmap
 
 .. image:: https://readthedocs.org/projects/flowmap/badge/?version=latest
         :target: https://flowmap.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
 
-.. image:: https://pyup.io/repos/github/SiggyF/flowmap/shield.svg
-     :target: https://pyup.io/repos/github/SiggyF/flowmap/
+.. image:: https://pyup.io/repos/github/openearth/flowmap/shield.svg
+     :target: https://pyup.io/repos/github/openearth/flowmap/
      :alt: Updates
 
 
