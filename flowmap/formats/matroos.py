@@ -294,8 +294,9 @@ class Matroos(NetCDF):
         metadata['metadata']['format'] = str(self)
         llur_wgs84 = self.canvas['bbox_wgs84']
         extent = dict(
-            sw=llur_wgs84[:2],
-            ne=llur_wgs84[3:5],
+            # lat, lon
+            sw=[llur_wgs84[1], llur_wgs84[0]],
+            ne=[llur_wgs84[4], llur_wgs84[3],],
             time=(self.grid['time'][0], self.grid['time'][-1])
 
         )
