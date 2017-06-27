@@ -80,7 +80,11 @@ module.exports.index = (event, context, callback) => {
               statusCode: 200,
               body: JSON.stringify({
                 "models": models
-              })
+              }),
+              headers: {
+                // Required for CORS support to work (options request not supported)
+                "Access-Control-Allow-Origin" : "*"
+              }
             };
             callback(null, response);
           }

@@ -72,6 +72,21 @@ functions:
       - http:
           path: models
           method: get
+          cors: true
+  waterinfoPoints:
+    handler: waterinfo.points
+    events:
+      - http:
+          path: waterinfo/points
+          method: get
+          cors: true
+  waterinfoDetails:
+    handler: waterinfo.details
+    events:
+      - http:
+          path: waterinfo/details/{location}
+          method: get
+          cors: true
 
 #    The following are a few example events you can configure
 #    NOTE: Please make sure to change your handler code to work with those events
