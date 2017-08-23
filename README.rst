@@ -32,6 +32,26 @@ Scripts that generate flowmaps for specific models:
 
 - matroos_flowmap.sh (download model results for DCSM model and transform them to a flowmap)
 
+Usage 
+=====
+
+To use the software you can download the latest version using docker. 
+If you have docker installed you can download the software using the command:
+
+```
+docker pull openearth/flowmap
+```
+
+You can run the software by typing the command (for now please prepend the flowmap command with `/opt/conda/envs/py35/bin`.
+
+```
+docker run openearth/flowmap flowmap --help
+docker run openearth/flowmap flowmap generate --help
+docker run openearth/flowmap flowmap generate --help
+```
+
+In the case of Delft3D you can convert the default nefis output to netCDF using the vs_trim2nc.m matlab script.
+There is also direct nefis support in development, but that has not been properly tested.
 
 Features
 --------
