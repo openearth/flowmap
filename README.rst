@@ -48,10 +48,13 @@ You can run the software by typing the command (for now please prepend the flowm
 
   docker run openearth/flowmap flowmap --help
   docker run openearth/flowmap flowmap generate --help
-  docker run openearth/flowmap flowmap generate delft3doutput.nc
+  docker run openearth/flowmap flowmap generate delft3doutput.nc --src_epsg=28992 --dst_epsg=3857
 
 In the case of Delft3D you can convert the default nefis output to netCDF using the vs_trim2nc.m matlab script.
 There is also direct nefis support in development, but that has not been properly tested.
+By default you will want to project to the web mercator projection. Then you can reuse the velocities as pixels/s in an animation.
+
+
 
 Features
 --------
