@@ -48,7 +48,7 @@ You can run the software by typing the command (for now please prepend the flowm
 
   docker run openearth/flowmap flowmap --help
   docker run openearth/flowmap flowmap generate --help
-  docker run openearth/flowmap flowmap generate --help
+  docker run openearth/flowmap flowmap generate inputfile.nc
 
 In the case of Delft3D you can convert the default nefis output to netCDF using the vs_trim2nc.m matlab script.
 There is also direct nefis support in development, but that has not been properly tested.
