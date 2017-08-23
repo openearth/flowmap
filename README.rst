@@ -39,11 +39,13 @@ To use the software you can download the latest version using docker.
 If you have docker installed you can download the software using the command:
 
 .. code:: bash
+
   docker pull openearth/flowmap
 
 You can run the software by typing the command (for now please prepend the flowmap command with `/opt/conda/envs/py35/bin`.
 
 .. code:: bash
+
   docker run openearth/flowmap flowmap --help
   docker run openearth/flowmap flowmap generate --help
   docker run openearth/flowmap flowmap generate --help
