@@ -2,7 +2,6 @@ FROM continuumio/miniconda3
 MAINTAINER Fedor Baart <fedor.baart@deltares.nl>
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 # update system and install wget
-COPY ./ app/
 RUN \
     apt-get install -y apt-utils && \
     echo "deb http://httpredir.debian.org/debian jessie-backports main non-free" >> /etc/apt/sources.list && \
@@ -13,7 +12,10 @@ RUN \
 RUN conda create -y -n py35 python=3.5 libgdal gdal jpeg=8d netcdf4 matplotlib scikit-image tqdm cython pillow click pandas
 # install flowmap in the new environment
 RUN /opt/conda/envs/py35/bin/pip install awscli
+
+COPY ./ app/
 RUN /opt/conda/envs/py35/bin/pip install app/
+
 ENV PATH /opt/conda/bin:$PATH
 # not sure what this is
 ENTRYPOINT [ "/usr/bin/tini", "--" ]

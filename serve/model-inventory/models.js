@@ -72,7 +72,20 @@ module.exports.index = (event, context, callback) => {
               (model) => {
                 if (_.has(model, 'uv.src')) {
                   model.uv.src = s3Url + model.uv.src;
+                  // hirlam northsea
+                  if (_.includes(model.uv.src, 'dcsm_v6_kf_hirlam')) {
+                    model.metadata.summary = 'The Dutch Continental Shelf Model provides daily sea level forecasts.';
+                    model.metadata.title = 'DCSM';
+                  }
+
+                  if (_.includes(model.uv.src, 'dcsmv6_zunov4_zuno_kf_hirlam')) {
+                    model.metadata.summary = 'The ZUNO model provides daily sea level forecasts for the southern part of the North Sea.';
+                    model.metadata.title = 'ZUNO';
+                  }
+                  console.log('model', model, _.includes(model.uv.src, 'dcsm_v6_kf_hirlam'));
                 }
+
+
               }
             );
 
