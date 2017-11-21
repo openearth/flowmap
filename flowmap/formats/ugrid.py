@@ -4,12 +4,12 @@ import pathlib
 # TODO, switch to pyugrid after next release
 import netCDF4
 import numpy as np
+
 from tvtk.api import tvtk
-from tvtk.common import configure_input, configure_source_data, configure_input_data
-import vtk
 
+from .formats import transform
 from .netcdf import NetCDF
-
+from .. import particles
 
 logger = logging.getLogger(__name__)
 
@@ -76,70 +76,7 @@ class UGrid(NetCDF):
         polydata.polys = cell_array
         return polydata
 
-    @staticmethod
-    def make_particles(polydata, n=100, mode='random'):
-        points = polydata.points.to_array()
-        xmax, ymax, zmax = points.max(axis=0)
-        xmin, ymin, zmin = points.min(axis=0)
-        # take the srt of n
-        n = np.round(np.sqrt(n)).astype('int')
-        if mode != 'random':
-            seed_X, seed_Y = np.meshgrid(
-                np.linspace(xmin, xmax, num=n),
-                np.linspace(ymin, ymax, num=n)
-            )
-        else:
-            seed_X = np.random.random((n, n)) * (xmax - xmin) + xmin
-            seed_Y = np.random.random((n, n)) * (ymax - ymin) + ymin
-        seed_Z = np.zeros_like(seed_X)
-        seed_points = np.c_[seed_X.ravel(), seed_Y.ravel(), seed_Z.ravel()]
-        seed = tvtk.PolyData()
-        seed.points = seed_points
-        return seed
 
-    @staticmethod
-    def make_tracer_pipeline(polydata, seed, dt=None, l=1000):
-        # create elements of the pipeline
-        tracer = tvtk.StreamTracer()
-
-
-        # # # You can compute up to 1km per timestep (8km/hr for )
-
-        n = 200  # max number of steps
-        if dt is not None:
-            # maximum velocity
-            uvw = polydata.cell_data.get_array(0).to_array()
-            max_velocity = np.power(uvw, 2).sum(axis=1).max()
-            # s * m / s
-            l = dt * max_velocity
-
-
-        # maximum 1km
-        tracer.maximum_propagation = l
-        # # # In m
-        tracer.integration_step_unit = vtk.vtkStreamTracer.LENGTH_UNIT
-        # # # Minimum 5 per step
-        tracer.minimum_integration_step = (l/n)
-        # # # Maximum 100m per step
-        tracer.maximum_integration_step = 10*(l/n)
-        # # # Maximum 200 steps
-        tracer.maximum_number_of_steps = n
-        # # # Maximum error 1cm
-        tracer.maximum_error = 1e-2
-        # # # We use a path integration. You could argue that you need a
-        # # # particle tracking algorithm that matches the numerical grid
-        # # # (in our case edge velocities
-        # # # and integration over a cell instead of over a line)
-        tracer.integrator_type = 'runge_kutta45'
-
-        tracer.debug = True
-
-        cell2point = tvtk.CellDataToPointData()
-        # setup the pipeline
-        configure_input(cell2point, polydata)
-        configure_input(tracer, cell2point)
-        configure_source_data(tracer, seed)
-        return tracer
 
     def update_polydata(self, polydata, t):
         variables = self.variables(t)
@@ -163,8 +100,28 @@ class UGrid(NetCDF):
     def streamlines(self, t):
         polydata = self.to_polydata()
         self.update_polydata(polydata, t)
-        seed = self.make_particles(polydata)
-        tracer = self.make_tracer_pipeline(polydata, seed)
+        seed = particles.make_particles(polydata, n=self.options.get('n_particles', 1000))
+        tracer = particles.make_tracer_pipeline(polydata, seed)
+        tracer.update()
+        lines = particles.extract_lines(tracer)
+
+        # convert coordinates
+        def line2lonlat(line):
+            x = line[:, 0]
+            y = line[:, 1]
+            z = line[:, 2]
+            lonlatz = self.srs['src2wgs84'].TransformPoints(line)
+            return np.array(lonlatz)
+        # replace lines with lonlat
+        lines['line'] = lines['line'].apply(
+            line2lonlat
+        )
+        # create a new name
+        path = pathlib.Path(self.path)
+        new_name = path.with_name(path.stem + '_streamlines').with_suffix('.geojson')
+        # save the particles
+        particles.export_lines(lines, str(new_name))
+
 
     def meta(self):
         metadata = super().meta()

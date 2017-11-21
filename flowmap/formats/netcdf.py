@@ -37,7 +37,7 @@ def file2uuid(fname):
 
 
 class NetCDF(object):
-    def __init__(self, path, src_epsg=4326, dst_epsg=28992, vmin=-0.5, vmax=0.5, framescale=3.0):
+    def __init__(self, path, src_epsg=4326, dst_epsg=28992, vmin=-0.5, vmax=0.5, framescale=3.0, **kwargs):
         self.path = path
         # source and destination epsg code
         self.src_epsg = src_epsg
@@ -45,6 +45,8 @@ class NetCDF(object):
         self.vmin = vmin
         self.vmax = vmax
         self.framescale = framescale
+        # store extra options
+        self.options = kwargs
         logger.debug("Object constructed with %s", vars(self))
 
     @property

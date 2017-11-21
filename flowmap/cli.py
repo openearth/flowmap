@@ -155,6 +155,11 @@ def timeseries(dataset, p, **kwargs):
     type=int,
     required=True
 )
+@click.option(
+    "--n_particles",
+    type=int,
+    default=1000
+)
 def streamlines(dataset, timestep, **kwargs):
     """Extract streamlines from the dataset. By default based on the last timestep"""
     klass = flowmap.formats.get_format(dataset, **kwargs)
