@@ -13,6 +13,22 @@ logger = logging.getLogger(__name__)
 # what to export on import from *, also used to get a list of available formats
 
 
+def get_format(dataset, **kwargs):
+    """get the format for the dataset"""
+
+    from .matroos import Matroos
+    from .ugrid import UGrid
+    from .delft3d import Delft3DMatlab
+
+    for format in [UGrid, Matroos, Delft3DMatlab]:
+        ds = format(dataset, **kwargs)
+        if ds.validate():
+            logger.info("Found valid format %s for %s", format, dataset)
+            return format
+    return Matroos
+
+
+
 def transform(x, y, transformation):
     """transform coordinates, for n-d coordinates with masks"""
     if len(x.shape) <= 2:
@@ -38,19 +54,6 @@ def transform(x, y, transformation):
     Y_t[~mask] = y_t
     return X_t, Y_t
 
-
-def get_format(dataset, **kwargs):
-    """get the format for the dataset"""
-
-    from .matroos import Matroos
-    from .delft3d import Delft3DMatlab
-
-    for format in [Matroos, Delft3DMatlab]:
-        ds = format(dataset, **kwargs)
-        if ds.validate():
-            logger.info("Found valid format %s for %s", format, dataset)
-            return format
-    return Matroos
 
 
 @functools.lru_cache()

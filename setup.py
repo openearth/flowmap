@@ -20,7 +20,9 @@ requirements = [
     'geojson',
     'tqdm',
     'GDAL',
-    'pandas'
+    'pandas',
+    'tvtk',
+    'vtk'
     # TODO: put package requirements here
 ]
 

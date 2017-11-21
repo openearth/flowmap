@@ -12,19 +12,13 @@ logger = logging.getLogger(__name__)
 
 
 dump_tmpl = """
-% for var in grid:
+file: ${filename}
+format: ${format}
+% for var in ds.variables:
 ${var}
- - shape: ${grid[var].shape}
- - type:  ${grid[var].dtype}
- - min:   ${grid[var].min()}
- - max:   ${grid[var].max()}
+ - shape: ${ds.variables[var].shape}
+ - type:  ${ds.variables[var].dtype}
 % endfor
-
-% for var in canvas:
-- ${var}: ${canvas[var]}
-% endfor
-
-
 """
 
 
@@ -94,7 +88,8 @@ class NetCDF(object):
 
     def dump(self):
         tmpl = mako.template.Template(dump_tmpl)
-        text = tmpl.render(grid=self.grid, canvas=self.canvas)
+        with netCDF4.Dataset(self.path) as ds:
+            text = tmpl.render(ds=ds, path=self.path, )
         return text
 
     def meta(self):
