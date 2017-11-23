@@ -25,16 +25,12 @@ class TestFlowmap(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_flowmap(self):
-        result = flowmap()
-        assert result is not None
-
     def test_command_line_interface(self):
         runner = CliRunner()
-        result = runner.invoke(cli.generate)
+        result = runner.invoke(cli.cli)
         assert result.exit_code == 0
-        assert 'flowmap.cli.main' in result.output
-        help_result = runner.invoke(cli.main, ['--help'])
+        assert 'Usage:' in result.output
+        help_result = runner.invoke(cli.cli, ['--help'])
         assert help_result.exit_code == 0
         assert '--help  Show this message and exit.' in help_result.output
 
