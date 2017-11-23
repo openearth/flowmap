@@ -21,8 +21,7 @@ requirements = [
     'tqdm',
     'GDAL',
     'pandas',
-    'mayavi',
-    'vtk'
+    'mayavi'
     # TODO: put package requirements here
 ]
 
