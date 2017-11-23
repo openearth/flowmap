@@ -107,6 +107,8 @@ class NetCDF(object):
                 for attr
                 in attrs
             })
+        # add the format
+        metadata['metadata']['format'] = str(self)
         # get metadata from default
         default_path = pathlib.Path('defaults.json')
         if default_path.exists():

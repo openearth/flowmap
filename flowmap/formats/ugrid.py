@@ -1,3 +1,11 @@
+"""
+UGrid file format support for flowmap software.
+The file format is expected to follow the UGRID convention 1.0
+
+http://ugrid-conventions.github.io/ugrid-conventions/
+
+"""
+
 import logging
 import pathlib
 
@@ -5,9 +13,9 @@ import pathlib
 import netCDF4
 import numpy as np
 
+# used for transforming into a vtk grid and for particles
 from tvtk.api import tvtk
 
-from .formats import transform
 from .netcdf import NetCDF
 from .. import particles
 
@@ -23,6 +31,7 @@ class UGrid(NetCDF):
 
         with netCDF4.Dataset(self.path) as ds:
             variables = ds.variables.keys()
+        # for now we hardcode the filenames. This can be replaced by the pyugrid, once released
         for var in ("mesh2d_ucx", "mesh2d_ucy", "mesh2d_face_nodes", "mesh2d_node_x", "mesh2d_node_x"):
             if var not in variables:
                 logger.warn(
@@ -36,12 +45,15 @@ class UGrid(NetCDF):
 
     @property
     def grid(self):
+        """return the grid variables including coordinates in space and time"""
+        # hard coded names for now
         with netCDF4.Dataset(self.path) as ds:
             x = ds.variables['mesh2d_node_x'][:]
             y = ds.variables['mesh2d_node_y'][:]
             faces = ds.variables['mesh2d_face_nodes'][:]
         z = np.zeros_like(x)
         points = np.c_[x, y, z]
+        # collect all variables
         grid = dict(
             x=x,
             y=y,
@@ -62,6 +74,8 @@ class UGrid(NetCDF):
 
         cell_array = tvtk.CellArray()
 
+        # for now we assume a grid with only quads.
+        # switch to pyugrid to support flexible meshes (with quads + triangles)
         assert not hasattr(faces, 'mask'), 'should not be a masked array'
         assert faces.shape[1] == 4, 'we expect quads only'
 
@@ -75,8 +89,6 @@ class UGrid(NetCDF):
         polydata.points = points
         polydata.polys = cell_array
         return polydata
-
-
 
     def update_polydata(self, polydata, t):
         variables = self.variables(t)
@@ -107,9 +119,6 @@ class UGrid(NetCDF):
 
         # convert coordinates
         def line2lonlat(line):
-            x = line[:, 0]
-            y = line[:, 1]
-            z = line[:, 2]
             lonlatz = self.srs['src2wgs84'].TransformPoints(line)
             return np.array(lonlatz)
         # replace lines with lonlat
@@ -121,9 +130,3 @@ class UGrid(NetCDF):
         new_name = path.with_name(path.stem + '_streamlines').with_suffix('.geojson')
         # save the particles
         particles.export_lines(lines, str(new_name))
-
-
-    def meta(self):
-        metadata = super().meta()
-        metadata['metadata']['format'] = str(self)
-        return metadata
