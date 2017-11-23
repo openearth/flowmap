@@ -70,6 +70,7 @@ def extract_lines(tracer):
     data = {}
 
     points = tracer.output.points.to_array()
+    points_df = extract_points(tracer)
 
     lines = tracer.output.lines.to_array()
 
@@ -80,6 +81,7 @@ def extract_lines(tracer):
     start = 0
     line_segments = []
     point_idx = []
+    integration_times = []
     for i in range(tracer.output.lines.number_of_cells):
         """loop over al lines"""
         n = lines[start]
@@ -87,9 +89,14 @@ def extract_lines(tracer):
         line = points[idx]
         line_segments.append(line)
         point_idx.append(idx)
+        # add the integration time of the last point
+        integration_times.append(
+            points_df.iloc[idx[-1]].IntegrationTime
+        )
         start += (n + 1)
     data['line'] = line_segments
     data['points'] = point_idx
+    data['IntegrationTime'] = integration_times
     return pd.DataFrame(data)
 
 
@@ -127,7 +134,7 @@ def export_lines(lines, filename):
         # convert to wgs84 or something ...
         lon, lat = line['line'][:, 0], line['line'][:, 1]
         linestring = geojson.LineString(coordinates=np.c_[lon, lat].tolist())
-        properties = dict(line[['SeedIds', 'ReasonForTermination']])
+        properties = dict(line[['SeedIds', 'ReasonForTermination', 'IntegrationTime']])
         feature = geojson.Feature(id=line['SeedIds'], geometry=linestring, properties=properties)
         features.append(feature)
     fc = geojson.FeatureCollection(features=features)
