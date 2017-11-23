@@ -6,7 +6,6 @@ python: 3.5
 
 env:
   - TOXENV=py35
-  - TOXENV=py27
 
 # command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
 install: pip install -r requirements_dev.txt
@@ -34,4 +33,4 @@ deploy:
   on:
     tags: true
     repo: openearth/flowmap
-    condition: $TOXENV == py27
+    condition: $TOXENV == py35
