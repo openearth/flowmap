@@ -13,7 +13,6 @@ import sys
 import unittest
 from click.testing import CliRunner
 
-from flowmap import flowmap
 from flowmap import cli
 
 

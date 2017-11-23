@@ -41,14 +41,12 @@ except ImportError:
     pass
 
 try:
-    import pandas as pd
-
-    def pandas_default(obj):
+    def to_json_default(obj):
         try:
             return json.loads(obj.to_json(orient='records'))
         except AttributeError:
             raise TypeError("not a to_json function")
-    registry.append(pandas_default)
+    registry.append(to_json_default)
 except ImportError:
     pass
 

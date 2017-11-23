@@ -4,7 +4,6 @@ import json
 import functools
 import pathlib
 
-import geojson
 import tqdm
 import pandas
 import netCDF4
@@ -13,7 +12,7 @@ import matplotlib.colors
 import skimage.draw
 import scipy.interpolate
 
-from .formats import transform, points2contours, contours2vertices
+from .formats import transform, contours2vertices
 from .netcdf import NetCDF
 
 import matplotlib.pyplot as plt
@@ -180,7 +179,7 @@ class Matroos(NetCDF):
             F.values = uv1.astype(F.values.dtype)
             UV1 = F(X, Y)
 
-            # cells without a velocity
+            # cells without a velocity (not used)
             value_mask = np.logical_or(
                 np.logical_and(
                     UV0[..., 0] == 0.0,
@@ -296,7 +295,7 @@ class Matroos(NetCDF):
         extent = dict(
             # lat, lon
             sw=[llur_wgs84[1], llur_wgs84[0]],
-            ne=[llur_wgs84[4], llur_wgs84[3],],
+            ne=[llur_wgs84[4], llur_wgs84[3]],
             time=(self.grid['time'][0], self.grid['time'][-1])
 
         )

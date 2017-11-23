@@ -26,12 +26,15 @@ def json_serializer(obj):
         return serial
     if isinstance(obj, uuid.UUID):
         return str(obj)
-    raise TypeError("Object %s of type %s not serializable " % (obj, type(obj)) )
+    raise TypeError("Object %s of type %s not serializable " % (
+        obj, type(obj))
+    )
 
 
 @click.group()
 def cli():
     pass
+
 
 @cli.command()
 @click.argument(
@@ -136,6 +139,7 @@ def timeseries(dataset, p, **kwargs):
     ds = klass(dataset, **kwargs)
     logger.info("extracting points %s", p)
     ds.extract_points(p)
+
 
 @cli.command()
 @click.argument(

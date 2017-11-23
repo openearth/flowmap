@@ -28,7 +28,6 @@ def get_format(dataset, **kwargs):
     return Matroos
 
 
-
 def transform(x, y, transformation):
     """transform coordinates, for n-d coordinates with masks"""
     if len(x.shape) <= 2:
@@ -53,7 +52,6 @@ def transform(x, y, transformation):
     X_t[~mask] = x_t
     Y_t[~mask] = y_t
     return X_t, Y_t
-
 
 
 @functools.lru_cache()
