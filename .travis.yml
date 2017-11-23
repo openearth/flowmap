@@ -6,7 +6,6 @@ python: 3.5
 
 env:
   - TOXENV=py35
-  - TOXENV=py27
 
 # command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
 install: pip install -r requirements_dev.txt
@@ -19,7 +18,7 @@ before_install:
   # Required to install Pillow
   - sudo apt-get -q -y install build-essential
   # GIS requirements.
-  - sudo apt-get -q -y install binutils gdal-bin libproj-dev libgeos-c1 libnetcdf-dev libgdal-dev python3-gdal python3-numpy
+  - sudo apt-get -q -y install binutils gdal-bin libproj-dev libgeos-c1 libnetcdf-dev libgdal-dev python3-gdal python3-numpy python3-vtk
 # command to run tests, e.g. python setup.py test
 script: tox -e ${TOXENV}
 
@@ -34,4 +33,4 @@ deploy:
   on:
     tags: true
     repo: openearth/flowmap
-    condition: $TOXENV == py27
+    condition: $TOXENV == py35

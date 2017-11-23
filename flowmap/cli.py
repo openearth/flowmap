@@ -26,12 +26,15 @@ def json_serializer(obj):
         return serial
     if isinstance(obj, uuid.UUID):
         return str(obj)
-    raise TypeError("Object %s of type %s not serializable " % (obj, type(obj)) )
+    raise TypeError("Object %s of type %s not serializable " % (
+        obj, type(obj))
+    )
 
 
 @click.group()
 def cli():
     pass
+
 
 @cli.command()
 @click.argument(
@@ -43,11 +46,8 @@ def cli():
 )
 @click.option(
     "--src_epsg",
-    type=int
-)
-@click.option(
-    "--dst_epsg",
-    type=int
+    type=int,
+    required=True
 )
 def dump(dataset, **kwargs):
     """show some info about the dataset"""
@@ -104,6 +104,7 @@ def generate(dataset, **kwargs):
     )
 )
 def meta(dataset, **kwargs):
+    """generate metadata json file"""
     klass = flowmap.formats.get_format(dataset, **kwargs)
     ds = klass(dataset, **kwargs)
     meta = ds.meta()
@@ -141,13 +142,47 @@ def timeseries(dataset, p, **kwargs):
 
 
 @cli.command()
+@click.argument(
+    "dataset",
+    type=click.Path(
+        exists=True,
+        resolve_path=True
+    )
+)
+@click.option(
+    "--timestep",
+    type=int,
+    default=-1
+)
+@click.option(
+    "--src_epsg",
+    type=int,
+    required=True
+)
+@click.option(
+    "--n_particles",
+    type=int,
+    default=1000
+)
+def streamlines(dataset, timestep, **kwargs):
+    """Extract streamlines from the dataset. By default based on the last timestep"""
+    klass = flowmap.formats.get_format(dataset, **kwargs)
+    ds = klass(dataset, **kwargs)
+    logger.info("extracting streamlines")
+    ds.streamlines(timestep)
+
+
+@cli.command()
 def formats():
     """List the available formats"""
-    logger.info("The following formats are available:")
-    for format in flowmap.formats:
+    available_formats = []
+    for name in dir(flowmap.formats):
+        format = getattr(flowmap.formats, name)
         # looks like a format
         if hasattr(format, "dump"):
-            logger.info("%s", format)
+            available_formats.append(name)
+    msg = "The following formats are available: {}".format(available_formats)
+    logger.info(msg)
 
 
 if __name__ == "__main__":

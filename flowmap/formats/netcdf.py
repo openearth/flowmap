@@ -12,19 +12,13 @@ logger = logging.getLogger(__name__)
 
 
 dump_tmpl = """
-% for var in grid:
+file: ${filename}
+format: ${format}
+% for var in ds.variables:
 ${var}
- - shape: ${grid[var].shape}
- - type:  ${grid[var].dtype}
- - min:   ${grid[var].min()}
- - max:   ${grid[var].max()}
+ - shape: ${ds.variables[var].shape}
+ - type:  ${ds.variables[var].dtype}
 % endfor
-
-% for var in canvas:
-- ${var}: ${canvas[var]}
-% endfor
-
-
 """
 
 
@@ -43,7 +37,7 @@ def file2uuid(fname):
 
 
 class NetCDF(object):
-    def __init__(self, path, src_epsg=4326, dst_epsg=28992, vmin=-0.5, vmax=0.5, framescale=3.0):
+    def __init__(self, path, src_epsg=4326, dst_epsg=28992, vmin=-0.5, vmax=0.5, framescale=3.0, **kwargs):
         self.path = path
         # source and destination epsg code
         self.src_epsg = src_epsg
@@ -51,6 +45,8 @@ class NetCDF(object):
         self.vmin = vmin
         self.vmax = vmax
         self.framescale = framescale
+        # store extra options
+        self.options = kwargs
         logger.debug("Object constructed with %s", vars(self))
 
     @property
@@ -94,7 +90,8 @@ class NetCDF(object):
 
     def dump(self):
         tmpl = mako.template.Template(dump_tmpl)
-        text = tmpl.render(grid=self.grid, canvas=self.canvas)
+        with netCDF4.Dataset(self.path) as ds:
+            text = tmpl.render(ds=ds, path=self.path, )
         return text
 
     def meta(self):
@@ -110,6 +107,8 @@ class NetCDF(object):
                 for attr
                 in attrs
             })
+        # add the format
+        metadata['metadata']['format'] = str(self)
         # get metadata from default
         default_path = pathlib.Path('defaults.json')
         if default_path.exists():
