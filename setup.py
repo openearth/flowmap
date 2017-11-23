@@ -19,7 +19,6 @@ requirements = [
     'mako',
     'geojson',
     'tqdm',
-    'GDAL',
     'pandas',
     'mayavi'
     # TODO: put package requirements here
