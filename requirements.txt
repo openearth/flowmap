@@ -2,7 +2,7 @@ Click>=6.0
 NetCDF4
 scipy
 numpy
-scikit-image
+scikit-image==0.13.1
 matplotlib
 mako
 geojson
