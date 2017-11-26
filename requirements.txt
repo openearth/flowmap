@@ -6,6 +6,6 @@ scikit-image
 matplotlib
 mako
 geojson
-tqdm
+tqdm==4.19.4
 pandas
 mayavi
