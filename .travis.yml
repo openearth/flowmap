@@ -4,14 +4,12 @@
 language: python
 python: 3.5
 
-env:
-  - TOXENV=py35
-
 # command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
 install:
   - source activate test-environment
   # install requirements, one way or another
   - while read requirement; do conda install --yes $requirement || pip install $requirement; done < requirements.txt
+  - conda install -c anaconda gdal libgdal
 
 before_install:
   - sudo apt-get update
@@ -27,18 +25,13 @@ before_install:
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
   - conda install xerces-c
-  # install in main anaconda (so tox will use it)
-  - conda install -c anaconda gdal=2.2 libgdal=2.2
   # Useful for debugging any issues with conda
   - conda info -a
   - conda config --add channels conda-forge
   # Replace dep1 dep2 ... with your dependencies
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy vtk netcdf4
   - while read requirement; do conda install --yes $requirement || pip install $requirement; done < requirements_dev.txt
-  # tox is not executable in anaconda...pff
-  - conda uninstall tox
-  - pip install tox
-script: tox -e ${TOXENV}
+script: make test
 
 # After you create the Github repo and add it to Travis, run the
 # travis_pypi_setup.py script to finish PyPI deployment setup
