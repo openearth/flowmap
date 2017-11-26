@@ -1,11 +1,11 @@
 Click>=6.0
 NetCDF4
-scipy
 numpy==1.13.3
+scipy==1.0.0
 scikit-image
 matplotlib
 mako
 geojson
 tqdm
-pandas
-mayavi
+pandas==0.21.0
+mayavi==4.5.0
