@@ -33,6 +33,7 @@ before_install:
   # tox is not executable in anaconda...pff
   - conda uninstall tox
   - pip install tox
+  - conda install xerces-c
 script: tox -e ${TOXENV}
 
 # After you create the Github repo and add it to Travis, run the
