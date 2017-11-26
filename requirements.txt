@@ -5,7 +5,7 @@ numpy
 scikit-image
 matplotlib
 mako
-geojson
+geojson==2.3.0
 tqdm
 pandas
 mayavi
