@@ -1,6 +1,6 @@
 Click>=6.0
 NetCDF4
-scipy
+scipy==1.0.0
 numpy
 scikit-image
 matplotlib
