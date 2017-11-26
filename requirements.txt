@@ -7,5 +7,5 @@ matplotlib
 mako
 geojson
 tqdm
-pandas
+pandas==0.21.0
 mayavi==4.5.0
