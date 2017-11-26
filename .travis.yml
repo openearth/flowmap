@@ -31,7 +31,7 @@ before_install:
   - conda info -a
   - conda config --add channels conda-forge
   # Replace dep1 dep2 ... with your dependencies
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION gdal numpy vtk netcdf4
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION gdal numpy vtk netcdf4 kealib
   - while read requirement; do conda install --yes $requirement || pip install $requirement; done < requirements_dev.txt
   # tox is not executable in anaconda...pff
   - conda uninstall tox
