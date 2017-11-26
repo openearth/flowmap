@@ -10,8 +10,10 @@ env:
 # command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
 install:
   - source activate test-environment
-  - conda install --file requirements_dev.txt
-  - conda install --file requirements.txt
+  # install requirements, one way or another
+  - while read requirement; do conda install --yes $requirement || pip install $requirement; done < requirements_dev.txt
+  - while read requirement; do conda install --yes $requirement || pip install $requirement; done < requirements.txt
+
 before_install:
   - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
       wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh;
