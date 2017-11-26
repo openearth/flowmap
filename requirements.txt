@@ -4,7 +4,7 @@ scikit-image==0.13.1
 numpy==1.13.3
 scipy==1.0.0
 scikit-image
-matplotlib
+matplotlib==2.1.0
 mako
 geojson
 tqdm
