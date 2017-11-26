@@ -9,12 +9,14 @@ env:
 
 # command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
 install:
+  - sudo apt-get update
+  - sudo apt-get install libxerces-c3.1
   - source activate test-environment
-  - conda install xerces-c
   # install requirements, one way or another
   - while read requirement; do conda install --yes $requirement || pip install $requirement; done < requirements.txt
 
 before_install:
+  - apt-get install libxerces-c3.1
   - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
       wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh;
     else
@@ -25,6 +27,7 @@ before_install:
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
+  - conda install xerces-c
   # Useful for debugging any issues with conda
   - conda info -a
   - conda config --add channels conda-forge
