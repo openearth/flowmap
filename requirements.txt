@@ -4,8 +4,8 @@ scikit-image==0.13.1
 numpy==1.13.3
 scipy==1.0.0
 scikit-image
+mako==1.0.7
 matplotlib==2.1.0
-mako
 geojson
 tqdm
 pandas==0.21.0
