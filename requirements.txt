@@ -8,4 +8,4 @@ mako
 geojson
 tqdm
 pandas==0.21.0
-mayavi
+mayavi==4.5.0
