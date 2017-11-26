@@ -4,7 +4,7 @@ scipy
 numpy
 scikit-image
 matplotlib
-mako
+mako==1.0.7
 geojson
 tqdm
 pandas
