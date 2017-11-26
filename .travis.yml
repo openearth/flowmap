@@ -15,7 +15,7 @@ install:
 
 before_install:
   - sudo apt-get update
-  - sudo apt-get install libxerces-c3.1
+  - sudo apt-get install libxerces-c3.1 netcdf-bin libnetcdf
   - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
       wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh;
     else
@@ -31,7 +31,7 @@ before_install:
   - conda info -a
   - conda config --add channels conda-forge
   # Replace dep1 dep2 ... with your dependencies
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION gdal numpy vtk
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION gdal numpy vtk netcdf4
   - while read requirement; do conda install --yes $requirement || pip install $requirement; done < requirements_dev.txt
   # tox is not executable in anaconda...pff
   - conda uninstall tox
