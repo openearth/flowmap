@@ -10,6 +10,7 @@ env:
 # command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
 install:
   - source activate test-environment
+  - conda install xerces-c
   # install requirements, one way or another
   - while read requirement; do conda install --yes $requirement || pip install $requirement; done < requirements.txt
 
@@ -33,7 +34,6 @@ before_install:
   # tox is not executable in anaconda...pff
   - conda uninstall tox
   - pip install tox
-  - conda install xerces-c
 script: tox -e ${TOXENV}
 
 # After you create the Github repo and add it to Travis, run the
