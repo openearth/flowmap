@@ -8,15 +8,16 @@ RUN \
     echo "deb-src http://httpredir.debian.org/debian jessie-backports main non-free" >> /etc/apt/sources.list && \
     apt-get update --fix-missing && \
     apt-get install -y ffmpeg wget unzip
-# switch to python 3.5 (no gdal in 3.6)
-RUN conda create -y -n py35 python=3.5 libgdal gdal jpeg=8d netcdf4 matplotlib scikit-image tqdm cython pillow click pandas
+
+# install everything from condaforge
+RUN conda create -y -n py36 python=3.6
+RUN conda install -c conda-forge mayavi libgdal gdal netcdf4 matplotlib scikit-image tqdm cython pillow click pandas
 # install flowmap in the new environment
-RUN /opt/conda/envs/py35/bin/pip install awscli
 
 COPY ./ app/
-RUN /opt/conda/envs/py35/bin/pip install app/
+RUN /opt/conda/envs/py36/bin/pip install app/
 
 ENV PATH /opt/conda/bin:$PATH
 # not sure what this is
 ENTRYPOINT [ "/usr/bin/tini", "--" ]
-CMD [ "/opt/conda/envs/py35/bin/matroos_flowmap" ]
+CMD [ "/opt/conda/envs/py36/bin/matroos_flowmap" ]

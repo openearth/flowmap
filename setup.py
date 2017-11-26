@@ -10,22 +10,11 @@ with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
 requirements = [
-    'Click>=6.0',
-    'NetCDF4',
-    'scipy',
-    'numpy',
-    'scikit-image',
-    'matplotlib',
-    'mako',
-    'geojson',
-    'tqdm',
-    'pandas',
-    'mayavi'
-    # TODO: put package requirements here
+    # installed through requirements.txt
 ]
 
 test_requirements = [
-    # TODO: put package test requirements here
+    # installed through requirements_dev.txt
 ]
 
 setup(
