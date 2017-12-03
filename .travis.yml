@@ -24,10 +24,10 @@ before_install:
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
-  - conda install xerces-c
+  - conda config --add channels conda-forge
+  - conda install xerces-c poppler
   # Useful for debugging any issues with conda
   - conda info -a
-  - conda config --add channels conda-forge
   # Replace dep1 dep2 ... with your dependencies
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy vtk netcdf4
   - while read requirement; do conda install --yes $requirement || pip install $requirement; done < requirements_dev.txt
