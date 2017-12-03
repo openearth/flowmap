@@ -31,6 +31,7 @@ before_install:
   # Replace dep1 dep2 ... with your dependencies
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy vtk netcdf4 rasterio poppler
   - while read requirement; do conda install --yes $requirement || pip install $requirement; done < requirements_dev.txt
+  - conda update rasterio poppler
 script: make test
 
 # After you create the Github repo and add it to Travis, run the
