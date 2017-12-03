@@ -9,7 +9,7 @@ install:
   - source activate test-environment
   # install requirements, one way or another
   - while read requirement; do conda install --yes $requirement || pip install $requirement; done < requirements.txt
-  - conda install -c conda-forge xerces-c==3.2.0 gdal libgdal rasterio poppler==0.61.1
+  - conda install -c conda-forge xerces-c==3.2.0 gdal libgdal rasterio poppler==0.52.0
 
 before_install:
   - sudo apt-get update
