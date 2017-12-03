@@ -12,12 +12,18 @@ import pathlib
 # TODO, switch to pyugrid after next release
 import netCDF4
 import numpy as np
+import pyugrid
 
 # used for transforming into a vtk grid and for particles
 from tvtk.api import tvtk
+import rasterio
+import rasterio.crs
 
 from .netcdf import NetCDF
 from .. import particles
+from .. import subgrid
+from ..dem import read_dem
+
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +69,21 @@ class UGrid(NetCDF):
         )
         return grid
 
+    # TODO: merge with grid
+    @property
+    def ugrid(self):
+        ugrid = pyugrid.UGrid.from_ncfile(self.path, 'mesh2d')
+        faces = ugrid.faces
+        face_centers = ugrid.face_coordinates
+        nodes = ugrid.nodes
+        face_coordinates = nodes[faces]
+        return dict(
+            face_coordinates=face_coordinates,
+            face_centers=face_centers,
+            faces=faces
+        )
+
+
     def to_polydata(self):
         grid = self.grid
 
@@ -91,7 +112,7 @@ class UGrid(NetCDF):
         return polydata
 
     def update_polydata(self, polydata, t):
-        variables = self.variables(t)
+        variables = self.velocities(t)
         ucx = variables['ucx']
         ucy = variables['ucy']
         vectors = np.c_[ucx, ucy, np.zeros_like(ucx)]
@@ -99,7 +120,18 @@ class UGrid(NetCDF):
         polydata.cell_data.vectors.name = 'vector'
         polydata.modified()
 
-    def variables(self, t):
+    def waterlevel(self, t):
+        with netCDF4.Dataset(self.path) as ds:
+            s1 = ds.variables['mesh2d_s1'][t]
+            waterdepth = ds.variables['mesh2d_waterdepth'][t]
+            vol1 = ds.variables['mesh2d_vol1'][t]
+        return dict(
+            self1=s1,
+            vol1=vol1,
+            waterdepth=waterdepth
+        )
+
+    def velocites(self, t):
         with netCDF4.Dataset(self.path) as ds:
             # cumulative velocities
             ucx = ds.variables['mesh2d_ucx'][t]
@@ -130,3 +162,51 @@ class UGrid(NetCDF):
         new_name = path.with_name(path.stem + '_streamlines').with_suffix('.geojson')
         # save the particles
         particles.export_lines(lines, str(new_name))
+
+    def subgrid(self, t):
+        dem = read_dem(self.options['dem'])
+        grid = self.ugrid
+        logger.info('creating subgrid tables')
+        # this is slow
+        tables = subgrid.build_tables(grid, dem)
+        data = self.waterlevel(t)
+        logger.info('computing subgrid band')
+        # this is also slow
+        band = subgrid.compute_band(grid, dem, tables, data)
+        logger.info('writing subgrid band')
+        options = dict(
+            dtype=rasterio.float32,
+            count=1,
+            compress='lzw',
+            tiled=True,
+            blockxsize=256,
+            blockysize=256,
+            driver='GTiff',
+            affine=dem['affine'],
+            width=dem['width'],
+            height=dem['height'],
+            crs=rasterio.crs.CRS({'init': 'epsg:%d' % (self.src_epsg)})
+        )
+        new_name = self.generate_name(
+            self.path,
+            suffix='.tiff',
+            topic=subgrid,
+            counter=t
+        )
+        with rasterio.open(new_name % (t, ), 'w', **options) as dst:
+            dst.write(band, 1)
+
+
+    @staticmethod
+    def generate_name(path, suffix, topic=None, counter=None):
+        path = pathlib.Path(path)
+        base = path.stem
+        if topic:
+            base += '_' + topic
+        if counter is not None:
+            if counter == -1:
+                base += '_last'
+            else:
+                base += '_%06d' % (counter, )
+        new_name = path.with_name(base).with_suffix(suffix)
+        return new_name
