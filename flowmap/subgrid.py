@@ -2,6 +2,7 @@ import bisect
 import logging
 
 import numpy as np
+import scipy.interpolate
 import pandas as pd
 import tqdm
 
@@ -59,6 +60,15 @@ def subgrid_waterdepth(face_idx, dem, grid, data, tables):
     idx = dem_i < target_level
     waterdepth_i[idx] = (target_level - dem_i[idx])
     return waterdepth_i
+
+
+def build_interpolate(grid):
+    """create an interpolation function"""
+    # assert a pyugrid
+    face_centers = grid['face_centers']
+    values = np.zeros_like(face_centers[:, 0], dtype='double')
+    L = scipy.interpolate.LinearNDInterpolator(face_centers, values)
+    return L
 
 
 def build_tables(grid, dem):

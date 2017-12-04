@@ -126,7 +126,7 @@ class UGrid(NetCDF):
             waterdepth = ds.variables['mesh2d_waterdepth'][t]
             vol1 = ds.variables['mesh2d_vol1'][t]
         return dict(
-            self1=s1,
+            s1=s1,
             vol1=vol1,
             waterdepth=waterdepth
         )
