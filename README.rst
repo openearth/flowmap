@@ -32,10 +32,10 @@ Scripts that generate flowmaps for specific models:
 
 - matroos_flowmap.sh (download model results for DCSM model and transform them to a flowmap)
 
-Usage 
+Usage
 =====
 
-To use the software you can download the latest version using docker. 
+To use the software you can download the latest version using docker.
 If you have docker installed you can download the software using the command:
 
 .. code:: bash
@@ -59,7 +59,9 @@ By default you will want to project to the web mercator projection. Then you can
 Features
 --------
 
-* TODO
+* flowmap: animated vectorfield used for interactive particles
+* streamlines: generate geojson of streamlines
+* subgrid: generate subgrid waterdepth
 
 Credits
 ---------

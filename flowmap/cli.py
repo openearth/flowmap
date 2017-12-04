@@ -169,7 +169,46 @@ def streamlines(dataset, timestep, **kwargs):
     klass = flowmap.formats.get_format(dataset, **kwargs)
     ds = klass(dataset, **kwargs)
     logger.info("extracting streamlines")
-    ds.streamlines(timestep)
+    if hasattr(ds, 'streamlines'):
+        ds.streamlines(timestep)
+    else:
+        raise ValueError('streamlines not yet supported for format', klass)
+
+
+@cli.command()
+@click.argument(
+    "dataset",
+    type=click.Path(
+        exists=True,
+        resolve_path=True
+    )
+)
+@click.argument(
+    "dem",
+    type=click.Path(
+        exists=True,
+        resolve_path=True
+    )
+)
+@click.option(
+    "--timestep",
+    type=int,
+    default=-1
+)
+@click.option(
+    "--src_epsg",
+    type=int,
+    required=True
+)
+def subgrid(dataset, dem, timestep, **kwargs):
+    """Create a-posteriori subgrid map for the dataset. By default based on the last timestep"""
+    klass = flowmap.formats.get_format(dataset, **kwargs)
+    ds = klass(dataset, dem=dem, **kwargs)
+    logger.info("extracting subgrid")
+    if hasattr(ds, 'subgrid'):
+        ds.subgrid(timestep)
+    else:
+        raise ValueError('subgrid not yet supported for format', klass)
 
 
 @cli.command()

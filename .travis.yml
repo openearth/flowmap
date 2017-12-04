@@ -9,7 +9,7 @@ install:
   - source activate test-environment
   # install requirements, one way or another
   - while read requirement; do conda install --yes $requirement || pip install $requirement; done < requirements.txt
-  - conda install -c anaconda gdal libgdal
+  - conda install -c conda-forge xerces-c==3.2.0 gdal libgdal rasterio poppler==0.52.0
 
 before_install:
   - sudo apt-get update
@@ -24,13 +24,13 @@ before_install:
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
+  - conda config --add channels conda-forge
   - conda install xerces-c
   # Useful for debugging any issues with conda
   - conda info -a
-  - conda config --add channels conda-forge
   # Replace dep1 dep2 ... with your dependencies
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy vtk netcdf4
-  - while read requirement; do conda install --yes $requirement || pip install $requirement; done < requirements_dev.txt
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy vtk netcdf4 rasterio poppler
+  - while read requirement; do conda install -n test-environment --yes $requirement || pip install $requirement; done < requirements_dev.txt
 script: make test
 
 # After you create the Github repo and add it to Travis, run the
