@@ -56,7 +56,8 @@ class TestSubgrid(unittest.TestCase):
         pass
 
     def test_interpolate(self):
-        L = subgrid.build_interpolate(self.grid)
+        values = np.zeros((self.grid['faces'].shape[0], 3), dtype='double')
+        L = subgrid.build_interpolate(self.grid, values)
         assert isinstance(L, scipy.interpolate.LinearNDInterpolator)
     def test_build_tables(self):
         tables = subgrid.build_tables(self.grid, self.dem)

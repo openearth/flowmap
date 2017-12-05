@@ -187,7 +187,7 @@ class UGrid(NetCDF):
             raise ValueError('unknown method')
         logger.info('writing subgrid band')
         options = dict(
-            dtype=rasterio.float32,
+            dtype=band.dtype,
             count=1,
             compress='lzw',
             tiled=True,
@@ -202,10 +202,10 @@ class UGrid(NetCDF):
         new_name = self.generate_name(
             self.path,
             suffix='.tiff',
-            topic=subgrid,
+            topic=method,
             counter=t
         )
-        with rasterio.open(new_name % (t, ), 'w', **options) as dst:
+        with rasterio.open(str(new_name), 'w', **options) as dst:
             dst.write(band, 1)
 
 
