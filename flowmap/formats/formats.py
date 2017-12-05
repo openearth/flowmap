@@ -6,8 +6,6 @@ import numpy as np
 import matplotlib.colors
 import tqdm
 
-matplotlib.use('Agg')
-
 logger = logging.getLogger(__name__)
 
 # what to export on import from *, also used to get a list of available formats

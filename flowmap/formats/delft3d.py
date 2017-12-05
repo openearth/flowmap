@@ -19,8 +19,6 @@ from .formats import transform
 from .netcdf import NetCDF
 from .json_encoder import RegistryEncoder as Encoder
 
-matplotlib.use('Agg')
-
 logger = logging.getLogger(__name__)
 
 

@@ -163,16 +163,28 @@ class UGrid(NetCDF):
         # save the particles
         particles.export_lines(lines, str(new_name))
 
-    def subgrid(self, t):
+    def subgrid(self, t, method):
+        """compute refined waterlevel using detailled dem, using subgrid or interpolate method"""
         dem = read_dem(self.options['dem'])
         grid = self.ugrid
-        logger.info('creating subgrid tables')
-        # this is slow
-        tables = subgrid.build_tables(grid, dem)
         data = self.waterlevel(t)
-        logger.info('computing subgrid band')
-        # this is also slow
-        band = subgrid.compute_band(grid, dem, tables, data)
+        if method == 'subgrid':
+
+            logger.info('creating subgrid tables')
+            # this is slow
+            tables = subgrid.build_tables(grid, dem)
+            logger.info('computing subgrid band')
+            # this is also slow
+            band = subgrid.compute_band(grid, dem, tables, data)
+        elif method == 'interpolate':
+            values = np.c_[data['s1'], data['vol1'], data['waterdepth']]
+            logger.info('building interpolation')
+            L = subgrid.build_interpolate(grid, values)
+            logger.info('computing interpolation for current timestep')
+            interpolated = subgrid.compute_interpolated(L, dem, data)
+            band = interpolated['masked_waterdepth']
+        else:
+            raise ValueError('unknown method')
         logger.info('writing subgrid band')
         options = dict(
             dtype=rasterio.float32,

@@ -196,17 +196,21 @@ def streamlines(dataset, timestep, **kwargs):
     default=-1
 )
 @click.option(
+    "--method",
+    default="interpolate"
+)
+@click.option(
     "--src_epsg",
     type=int,
     required=True
 )
-def subgrid(dataset, dem, timestep, **kwargs):
+def subgrid(dataset, dem, timestep, method, **kwargs):
     """Create a-posteriori subgrid map for the dataset. By default based on the last timestep"""
     klass = flowmap.formats.get_format(dataset, **kwargs)
     ds = klass(dataset, dem=dem, **kwargs)
     logger.info("extracting subgrid")
     if hasattr(ds, 'subgrid'):
-        ds.subgrid(timestep)
+        ds.subgrid(timestep, method='interpolate')
     else:
         raise ValueError('subgrid not yet supported for format', klass)
 
