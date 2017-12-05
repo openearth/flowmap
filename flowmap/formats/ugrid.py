@@ -187,7 +187,7 @@ class UGrid(NetCDF):
             raise ValueError('unknown method')
         logger.info('writing subgrid band')
         options = dict(
-            dtype=band.dtype,
+            dtype=str(band.dtype),
             count=1,
             compress='lzw',
             tiled=True,
