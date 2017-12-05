@@ -51,7 +51,6 @@ class TestSubgrid(unittest.TestCase):
         )
         self.dem['world2px'] = lambda xy: np.vstack((~self.dem['affine']) * (xy[:, 0], xy[:, 1])).T.astype('int')
 
-
     def tearDown(self):
         pass
 
@@ -59,6 +58,7 @@ class TestSubgrid(unittest.TestCase):
         values = np.zeros((self.grid['faces'].shape[0], 3), dtype='double')
         L = subgrid.build_interpolate(self.grid, values)
         assert isinstance(L, scipy.interpolate.LinearNDInterpolator)
+
     def test_build_tables(self):
         tables = subgrid.build_tables(self.grid, self.dem)
         assert len(tables) > 0
