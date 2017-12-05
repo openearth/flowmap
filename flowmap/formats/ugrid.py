@@ -15,6 +15,8 @@ import numpy as np
 import pyugrid
 
 # used for transforming into a vtk grid and for particles
+import tqdm
+import skimage.draw
 from tvtk.api import tvtk
 import rasterio
 import rasterio.crs
@@ -83,8 +85,8 @@ class UGrid(NetCDF):
             faces=faces
         )
 
-
     def to_polydata(self):
+        """convert grid to polydata"""
         grid = self.grid
 
         faces = grid['faces']
@@ -163,6 +165,16 @@ class UGrid(NetCDF):
         # save the particles
         particles.export_lines(lines, str(new_name))
 
+    def build_is_grid(self, raster):
+        is_grid = np.zeros_like(raster['band'], dtype='bool')
+        polys = np.array([raster['world2px'](xy) for xy in self.ugrid['face_coordinates']])
+        for poly in tqdm.tqdm(polys):
+            # drawing grid mask
+            rr, cc = skimage.draw.polygon(poly[:, 1], poly[:, 0])
+            is_grid[rr, cc] = True
+        return is_grid
+
+
     def subgrid(self, t, method):
         """compute refined waterlevel using detailled dem, using subgrid or interpolate method"""
         dem = read_dem(self.options['dem'])
@@ -178,16 +190,23 @@ class UGrid(NetCDF):
             band = subgrid.compute_band(grid, dem, tables, data)
         elif method == 'interpolate':
             values = np.c_[data['s1'], data['vol1'], data['waterdepth']]
+            # create a grid mask for the dem
+            is_grid = self.build_is_grid(dem)
             logger.info('building interpolation')
             L = subgrid.build_interpolate(grid, values)
             logger.info('computing interpolation for current timestep')
             interpolated = subgrid.compute_interpolated(L, dem, data)
             band = interpolated['masked_waterdepth']
+            # mask out non grid pixels
+            band.mask = np.logical_or(band.mask, ~is_grid)
         else:
             raise ValueError('unknown method')
         logger.info('writing subgrid band')
+        # use extreme value as nodata
+        nodata = np.finfo(band.dtype).min
         options = dict(
             dtype=str(band.dtype),
+            nodata=nodata,
             count=1,
             compress='lzw',
             tiled=True,
@@ -206,7 +225,7 @@ class UGrid(NetCDF):
             counter=t
         )
         with rasterio.open(str(new_name), 'w', **options) as dst:
-            dst.write(band, 1)
+            dst.write(band.filled(nodata), 1)
 
 
     @staticmethod
