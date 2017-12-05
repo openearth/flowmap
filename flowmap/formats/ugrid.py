@@ -55,6 +55,7 @@ class UGrid(NetCDF):
     def grid(self):
         """return the grid variables including coordinates in space and time"""
         # hard coded names for now
+        # TODO: switch to UGRID, see below
         with netCDF4.Dataset(self.path) as ds:
             x = ds.variables['mesh2d_node_x'][:]
             y = ds.variables['mesh2d_node_y'][:]
@@ -103,6 +104,7 @@ class UGrid(NetCDF):
         assert faces.shape[1] == 4, 'we expect quads only'
 
         # For unstructured grids you need to count the number of edges per cell
+        # TODO: check for cell length
         counts = np.ones((n_cells), dtype=faces.dtype) * 4
         cell_idx = np.c_[counts, faces - 1].ravel()
         cell_array.set_cells(n_cells, cell_idx)
@@ -122,7 +124,9 @@ class UGrid(NetCDF):
         polydata.cell_data.vectors.name = 'vector'
         polydata.modified()
 
+
     def waterlevel(self, t):
+        # TODO: inspect mesh variable
         with netCDF4.Dataset(self.path) as ds:
             s1 = ds.variables['mesh2d_s1'][t]
             waterdepth = ds.variables['mesh2d_waterdepth'][t]
@@ -134,6 +138,7 @@ class UGrid(NetCDF):
         )
 
     def velocites(self, t):
+        # TODO: inspect mesh variables
         with netCDF4.Dataset(self.path) as ds:
             # cumulative velocities
             ucx = ds.variables['mesh2d_ucx'][t]
@@ -170,6 +175,7 @@ class UGrid(NetCDF):
         polys = np.array([raster['world2px'](xy) for xy in self.ugrid['face_coordinates']])
         for poly in tqdm.tqdm(polys):
             # drawing grid mask
+            # TODO: check for triangles here...
             rr, cc = skimage.draw.polygon(poly[:, 1], poly[:, 0])
             is_grid[rr, cc] = True
         return is_grid
