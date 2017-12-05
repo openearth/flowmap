@@ -11,6 +11,6 @@ pandas==0.21.0
 mayavi==4.5.0
 rasterio==0.36.0
 Mako==1.0.7
-geojson==2.1.0
 scikit-image==0.13.1
+geojson==2.3.0
 git+https://github.com/SiggyF/pyugrid.git@develop
