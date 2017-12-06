@@ -57,8 +57,10 @@ class UGrid(NetCDF):
         # hard coded names for now
         # TODO: switch to UGRID, see below
         with netCDF4.Dataset(self.path) as ds:
+            # -> node_coordinates in pyugrid
             x = ds.variables['mesh2d_node_x'][:]
             y = ds.variables['mesh2d_node_y'][:]
+            # I think faces in pyugrid
             faces = ds.variables['mesh2d_face_nodes'][:]
         z = np.zeros_like(x)
         points = np.c_[x, y, z]
@@ -75,6 +77,8 @@ class UGrid(NetCDF):
     # TODO: merge with grid
     @property
     def ugrid(self):
+        """Generate a ugrid grid from the input"""
+        # TODO, lookup mesh name
         ugrid = pyugrid.UGrid.from_ncfile(self.path, 'mesh2d')
         faces = ugrid.faces
         face_centers = ugrid.face_coordinates
