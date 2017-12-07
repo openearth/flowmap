@@ -52,30 +52,6 @@ class UGrid(NetCDF):
         return valid
 
     @property
-    def grid(self):
-        """return the grid variables including coordinates in space and time"""
-        # hard coded names for now
-        # TODO: switch to UGRID, see below
-        with netCDF4.Dataset(self.path) as ds:
-            # -> node_coordinates in pyugrid
-            x = ds.variables['mesh2d_node_x'][:]
-            y = ds.variables['mesh2d_node_y'][:]
-            # I think faces in pyugrid
-            faces = ds.variables['mesh2d_face_nodes'][:]
-        z = np.zeros_like(x)
-        points = np.c_[x, y, z]
-        # collect all variables
-        grid = dict(
-            x=x,
-            y=y,
-            z=z,
-            points=points,
-            faces=faces
-        )
-        return grid
-
-    # TODO: merge with grid
-    @property
     def ugrid(self):
         """Generate a ugrid grid from the input"""
         # TODO, lookup mesh name
@@ -84,15 +60,20 @@ class UGrid(NetCDF):
         face_centers = ugrid.face_coordinates
         nodes = ugrid.nodes
         face_coordinates = nodes[faces]
+        x = nodes[:, 0]
+        y = nodes[:, 1]
+        z = np.zeros_like(x)
+        points = np.c_[x, y, z]
         return dict(
             face_coordinates=face_coordinates,
             face_centers=face_centers,
-            faces=faces
+            faces=faces,
+            points=points
         )
 
     def to_polydata(self):
         """convert grid to polydata"""
-        grid = self.grid
+        grid = self.ugrid
 
         faces = grid['faces']
         points = grid['points']
@@ -102,15 +83,10 @@ class UGrid(NetCDF):
 
         cell_array = tvtk.CellArray()
 
-        # for now we assume a grid with only quads.
-        # switch to pyugrid to support flexible meshes (with quads + triangles)
-        assert not hasattr(faces, 'mask'), 'should not be a masked array'
-        assert faces.shape[1] == 4, 'we expect quads only'
-
-        # For unstructured grids you need to count the number of edges per cell
-        # TODO: check for cell length
-        counts = np.ones((n_cells), dtype=faces.dtype) * 4
-        cell_idx = np.c_[counts, faces - 1].ravel()
+        counts = (~faces.mask).sum(axis=1)
+        faces_zero_based = faces - 1
+        cell_idx = np.c_[counts, faces_zero_based.fill(-999)].ravel()
+        cell_idx = cell_idx[cell_idx != -999]
         cell_array.set_cells(n_cells, cell_idx)
 
         # fill in the properties
@@ -141,7 +117,7 @@ class UGrid(NetCDF):
             waterdepth=waterdepth
         )
 
-    def velocites(self, t):
+    def velocities(self, t):
         # TODO: inspect mesh variables
         with netCDF4.Dataset(self.path) as ds:
             # cumulative velocities
@@ -175,12 +151,13 @@ class UGrid(NetCDF):
         particles.export_lines(lines, str(new_name))
 
     def build_is_grid(self, raster):
+        counts = (~self.ugrid['faces'].mask).sum(axis=1)
         is_grid = np.zeros_like(raster['band'], dtype='bool')
         polys = np.array([raster['world2px'](xy) for xy in self.ugrid['face_coordinates']])
-        for poly in tqdm.tqdm(polys):
+        for i, poly in tqdm.tqdm(enumerate(polys)):
             # drawing grid mask
             # TODO: check for triangles here...
-            rr, cc = skimage.draw.polygon(poly[:, 1], poly[:, 0])
+            rr, cc = skimage.draw.polygon(poly[:counts[i], 1], poly[:counts[i], 0])
             is_grid[rr, cc] = True
         return is_grid
 
