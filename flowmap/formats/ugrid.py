@@ -15,6 +15,8 @@ import numpy as np
 import pyugrid
 
 # used for transforming into a vtk grid and for particles
+import tqdm
+import skimage.draw
 from tvtk.api import tvtk
 import rasterio
 import rasterio.crs
@@ -50,42 +52,28 @@ class UGrid(NetCDF):
         return valid
 
     @property
-    def grid(self):
-        """return the grid variables including coordinates in space and time"""
-        # hard coded names for now
-        with netCDF4.Dataset(self.path) as ds:
-            x = ds.variables['mesh2d_node_x'][:]
-            y = ds.variables['mesh2d_node_y'][:]
-            faces = ds.variables['mesh2d_face_nodes'][:]
-        z = np.zeros_like(x)
-        points = np.c_[x, y, z]
-        # collect all variables
-        grid = dict(
-            x=x,
-            y=y,
-            z=z,
-            points=points,
-            faces=faces
-        )
-        return grid
-
-    # TODO: merge with grid
-    @property
     def ugrid(self):
+        """Generate a ugrid grid from the input"""
+        # TODO, lookup mesh name
         ugrid = pyugrid.UGrid.from_ncfile(self.path, 'mesh2d')
         faces = ugrid.faces
         face_centers = ugrid.face_coordinates
         nodes = ugrid.nodes
         face_coordinates = nodes[faces]
+        x = nodes[:, 0]
+        y = nodes[:, 1]
+        z = np.zeros_like(x)
+        points = np.c_[x, y, z]
         return dict(
             face_coordinates=face_coordinates,
             face_centers=face_centers,
-            faces=faces
+            faces=faces,
+            points=points
         )
 
-
     def to_polydata(self):
-        grid = self.grid
+        """convert grid to polydata"""
+        grid = self.ugrid
 
         faces = grid['faces']
         points = grid['points']
@@ -95,14 +83,10 @@ class UGrid(NetCDF):
 
         cell_array = tvtk.CellArray()
 
-        # for now we assume a grid with only quads.
-        # switch to pyugrid to support flexible meshes (with quads + triangles)
-        assert not hasattr(faces, 'mask'), 'should not be a masked array'
-        assert faces.shape[1] == 4, 'we expect quads only'
-
-        # For unstructured grids you need to count the number of edges per cell
-        counts = np.ones((n_cells), dtype=faces.dtype) * 4
-        cell_idx = np.c_[counts, faces - 1].ravel()
+        counts = (~faces.mask).sum(axis=1)
+        faces_zero_based = faces - 1
+        cell_idx = np.c_[counts, faces_zero_based.fill(-999)].ravel()
+        cell_idx = cell_idx[cell_idx != -999]
         cell_array.set_cells(n_cells, cell_idx)
 
         # fill in the properties
@@ -120,18 +104,21 @@ class UGrid(NetCDF):
         polydata.cell_data.vectors.name = 'vector'
         polydata.modified()
 
+
     def waterlevel(self, t):
+        # TODO: inspect mesh variable
         with netCDF4.Dataset(self.path) as ds:
             s1 = ds.variables['mesh2d_s1'][t]
             waterdepth = ds.variables['mesh2d_waterdepth'][t]
             vol1 = ds.variables['mesh2d_vol1'][t]
         return dict(
-            self1=s1,
+            s1=s1,
             vol1=vol1,
             waterdepth=waterdepth
         )
 
-    def velocites(self, t):
+    def velocities(self, t):
+        # TODO: inspect mesh variables
         with netCDF4.Dataset(self.path) as ds:
             # cumulative velocities
             ucx = ds.variables['mesh2d_ucx'][t]
@@ -163,19 +150,50 @@ class UGrid(NetCDF):
         # save the particles
         particles.export_lines(lines, str(new_name))
 
-    def subgrid(self, t):
+    def build_is_grid(self, raster):
+        counts = (~self.ugrid['faces'].mask).sum(axis=1)
+        is_grid = np.zeros_like(raster['band'], dtype='bool')
+        polys = np.array([raster['world2px'](xy) for xy in self.ugrid['face_coordinates']])
+        for i, poly in tqdm.tqdm(enumerate(polys)):
+            # drawing grid mask
+            # TODO: check for triangles here...
+            rr, cc = skimage.draw.polygon(poly[:counts[i], 1], poly[:counts[i], 0])
+            is_grid[rr, cc] = True
+        return is_grid
+
+
+    def subgrid(self, t, method):
+        """compute refined waterlevel using detailled dem, using subgrid or interpolate method"""
         dem = read_dem(self.options['dem'])
         grid = self.ugrid
-        logger.info('creating subgrid tables')
-        # this is slow
-        tables = subgrid.build_tables(grid, dem)
         data = self.waterlevel(t)
-        logger.info('computing subgrid band')
-        # this is also slow
-        band = subgrid.compute_band(grid, dem, tables, data)
+        if method == 'subgrid':
+
+            logger.info('creating subgrid tables')
+            # this is slow
+            tables = subgrid.build_tables(grid, dem)
+            logger.info('computing subgrid band')
+            # this is also slow
+            band = subgrid.compute_band(grid, dem, tables, data)
+        elif method == 'interpolate':
+            values = np.c_[data['s1'], data['vol1'], data['waterdepth']]
+            # create a grid mask for the dem
+            is_grid = self.build_is_grid(dem)
+            logger.info('building interpolation')
+            L = subgrid.build_interpolate(grid, values)
+            logger.info('computing interpolation for current timestep')
+            interpolated = subgrid.compute_interpolated(L, dem, data)
+            band = interpolated['masked_waterdepth']
+            # mask out non grid pixels
+            band.mask = np.logical_or(band.mask, ~is_grid)
+        else:
+            raise ValueError('unknown method')
         logger.info('writing subgrid band')
+        # use extreme value as nodata
+        nodata = np.finfo(band.dtype).min
         options = dict(
-            dtype=rasterio.float32,
+            dtype=str(band.dtype),
+            nodata=nodata,
             count=1,
             compress='lzw',
             tiled=True,
@@ -190,11 +208,11 @@ class UGrid(NetCDF):
         new_name = self.generate_name(
             self.path,
             suffix='.tiff',
-            topic=subgrid,
+            topic=method,
             counter=t
         )
-        with rasterio.open(new_name % (t, ), 'w', **options) as dst:
-            dst.write(band, 1)
+        with rasterio.open(str(new_name), 'w', **options) as dst:
+            dst.write(band.filled(nodata), 1)
 
 
     @staticmethod

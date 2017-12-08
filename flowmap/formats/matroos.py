@@ -16,7 +16,7 @@ from .formats import transform, contours2vertices
 from .netcdf import NetCDF
 
 import matplotlib.pyplot as plt
-matplotlib.use('Agg')
+
 
 logger = logging.getLogger(__name__)
 

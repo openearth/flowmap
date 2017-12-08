@@ -2,6 +2,7 @@ import bisect
 import logging
 
 import numpy as np
+import scipy.interpolate
 import pandas as pd
 import tqdm
 
@@ -59,6 +60,14 @@ def subgrid_waterdepth(face_idx, dem, grid, data, tables):
     idx = dem_i < target_level
     waterdepth_i[idx] = (target_level - dem_i[idx])
     return waterdepth_i
+
+
+def build_interpolate(grid, values):
+    """create an interpolation function"""
+    # assert a pyugrid
+    face_centers = grid['face_centers']
+    L = scipy.interpolate.LinearNDInterpolator(face_centers, values)
+    return L
 
 
 def build_tables(grid, dem):
@@ -126,3 +135,38 @@ def compute_band(grid, dem, tables, data):
         band[row['slice']] = waterdepth_i
     logger.info("skipped %s cells (%s)", len(excluded), excluded)
     return band
+
+
+def compute_interpolated(L, dem, data, s=None):
+    """compute a map of interpolated waterdepth, masked where detailed topography >= interpolated waterlevel, optionally sliced by a tuple (s) of row, column slices"""
+    if s is None:
+        s = np.s_[:, :]
+
+    # create the pixel grid (assuming no rotation)
+    affine = dem['affine']
+    assert affine.b == 0 and affine.d == 0, 'rotated dems not implemented'
+    y = np.arange(affine.f, affine.f + affine.e * dem['height'], affine.e)
+    x = np.arange(affine.c, affine.c + affine.a * dem['width'], affine.a)
+    # we need the full grid to get the interpolated values
+    X, Y = np.meshgrid(x[s[1]], y[s[0]])
+    # fill the interpolation function
+    msg = 'Interpolation function should be filled with s1, vol1, and waterdepth'
+    assert L.values.shape[1] == 3, msg
+    # fill in new values
+    L.values = np.c_[data['s1'], data['vol1'], data['waterdepth']]
+    # compute interplation
+    interpolated = L(X, Y)
+    # get the variables
+    s1 = interpolated[..., 0]
+    waterdepth = interpolated[..., 2]
+    vol1 = interpolated[..., 1]
+    # lookup band
+    dem_band = dem['band'][s]
+    # mask interpolated values using dem
+    masked_waterdepth = np.ma.masked_array(waterdepth, mask=dem_band >= s1)
+    return {
+        "masked_waterdepth": masked_waterdepth,
+        "s1": s1,
+        "vol1": vol1,
+        "dem": dem_band
+    }
