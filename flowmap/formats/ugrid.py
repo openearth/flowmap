@@ -57,6 +57,7 @@ class UGrid(NetCDF):
         # TODO, lookup mesh name
         ugrid = pyugrid.UGrid.from_ncfile(self.path, 'mesh2d')
         faces = ugrid.faces
+        faces_masked = np.ma.masked_array(faces, mask=not faces.fill)
         face_centers = ugrid.face_coordinates
         nodes = ugrid.nodes
         face_coordinates = nodes[faces]
@@ -67,7 +68,7 @@ class UGrid(NetCDF):
         return dict(
             face_coordinates=face_coordinates,
             face_centers=face_centers,
-            faces=faces,
+            faces=faces_masked,
             points=points
         )
 
