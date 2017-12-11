@@ -85,7 +85,7 @@ class UGrid(NetCDF):
 
         counts = (~faces.mask).sum(axis=1)
         faces_zero_based = faces - 1
-        cell_idx = np.c_[counts, faces_zero_based.fill(-999)].ravel()
+        cell_idx = np.c_[counts, faces_zero_based.filled(-999)].ravel()
         cell_idx = cell_idx[cell_idx != -999]
         cell_array.set_cells(n_cells, cell_idx)
 
@@ -213,6 +213,10 @@ class UGrid(NetCDF):
         )
         with rasterio.open(str(new_name), 'w', **options) as dst:
             dst.write(band.filled(nodata), 1)
+
+    def export(self, format):
+        grid = self.ugrid
+
 
 
     @staticmethod
