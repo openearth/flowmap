@@ -7,6 +7,7 @@ http://ugrid-conventions.github.io/ugrid-conventions/
 """
 
 import logging
+import pickle
 import pathlib
 
 # TODO, switch to pyugrid after next release
@@ -173,7 +174,17 @@ class UGrid(NetCDF):
 
             logger.info('creating subgrid tables')
             # this is slow
-            tables = subgrid.build_tables(grid, dem)
+            table_name = self.generate_name(
+                self.path,
+                suffix='.pckl',
+                topic=format
+            )
+            table_path = pathlib.Path(table_name)
+            if table_path.exists():
+                with open(table_path, 'rb') as f:
+                    tables = pickle.load(f)
+            else:
+                tables = subgrid.build_tables(grid, dem)
             logger.info('computing subgrid band')
             # this is also slow
             band = subgrid.compute_band(grid, dem, tables, data)
@@ -217,6 +228,7 @@ class UGrid(NetCDF):
             dst.write(band.filled(nodata), 1)
 
     def export(self, format):
+        """export dataset"""
         if format == 'hull':
             poly = self.to_polydata()
             crs = geojson.crs.Named(
@@ -241,6 +253,20 @@ class UGrid(NetCDF):
 
             with open(new_name, 'w') as f:
                 geojson.dump(feature, f)
+        elif format == 'tables':
+            dem = read_dem(self.options['dem'])
+            grid = self.ugrid
+            tables = subgrid.build_tables(grid, dem)
+            new_name = self.generate_name(
+                self.path,
+                suffix='.pckl',
+                topic=format
+            )
+            with open(new_name, 'wb') as f:
+                pickle.dump(tables, f, pickle.HIGHEST_PROTOCOL)
+        else:
+            raise ValueError('unknown format: %s' % (format, ))
+
 
     @staticmethod
     def generate_name(path, suffix, topic=None, counter=None):

@@ -223,19 +223,26 @@ def subgrid(dataset, dem, timestep, method, **kwargs):
         resolve_path=True
     )
 )
+@click.argument(
+    "dem",
+    type=click.Path(
+        exists=True,
+        resolve_path=True
+    )
+)
 @click.option(
     "--format",
-    type=click.Choice(['hull'])
+    type=click.Choice(['hull', 'tables'])
 )
 @click.option(
     "--src_epsg",
     type=int,
     required=True
 )
-def export(dataset, format, **kwargs):
+def export(dataset, dem, format, **kwargs):
     """Create a geojson file"""
     klass = flowmap.formats.get_format(dataset, **kwargs)
-    ds = klass(dataset, **kwargs)
+    ds = klass(dataset, dem=dem, **kwargs)
     logger.info("exporting grid")
     if hasattr(ds, 'export'):
         ds.export(format=format)
