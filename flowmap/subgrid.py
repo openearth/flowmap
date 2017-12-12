@@ -38,7 +38,7 @@ def subgrid_waterdepth(face_idx, dem, grid, data, tables):
     volume_table = hist["volume_table"]
     cum_volume_table = hist["cum_volume_table"]
 
-    dem_i = hist['dem']
+    dem_i = dem['band'][hist['slice']]
 
     # this part is once volume is known
     vol_i = data['vol1'][face_idx]
@@ -76,7 +76,8 @@ def build_tables(grid, dem):
     # compute cache of histograms per cell
     idx = range(grid['face_coordinates'].shape[0])
     faces = grid['face_coordinates'][idx]
-    tables = {}
+
+    rows = []
     for id_, face in zip(idx, tqdm.tqdm(faces)):
         affine = dem['affine']
         face_px = dem['world2px'](face)
@@ -104,16 +105,15 @@ def build_tables(grid, dem):
             id=id_,
             slice=face_px2slice,
             face=face,
-            dem=dem_i,
             volume_table=volume_table,
             cum_volume_table=cum_volume_table,
             n=n,
             extent=extent,
             bins=bins
         )
-        tables[id_] = record
+        rows.append(record)
 
-    tables = pd.DataFrame.from_records(list(tables.values())).set_index('id')
+    tables = pd.DataFrame.from_records(rows).set_index('id')
     return tables
 
 
