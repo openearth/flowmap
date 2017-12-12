@@ -80,12 +80,13 @@ class UGrid(NetCDF):
         points = grid['points']
 
         n_cells = faces.shape[0]
-        points.shape, n_cells
 
         cell_array = tvtk.CellArray()
 
         counts = (~faces.mask).sum(axis=1)
         faces_zero_based = faces - 1
+        assert faces_zero_based.min() >= 0, 'expected 0 based faces_zero_based: %s based' % (faces_zero_based.min(), )
+        assert faces.min() >= 1, 'expected 1 based faces'
         cell_idx = np.c_[counts, faces_zero_based.filled(-999)].ravel()
         cell_idx = cell_idx[cell_idx != -999]
         cell_array.set_cells(n_cells, cell_idx)
