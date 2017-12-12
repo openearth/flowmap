@@ -7,12 +7,14 @@ http://ugrid-conventions.github.io/ugrid-conventions/
 """
 
 import logging
+import pickle
 import pathlib
 
 # TODO, switch to pyugrid after next release
 import netCDF4
 import numpy as np
 import pyugrid
+import geojson
 
 # used for transforming into a vtk grid and for particles
 import tqdm
@@ -173,7 +175,17 @@ class UGrid(NetCDF):
 
             logger.info('creating subgrid tables')
             # this is slow
-            tables = subgrid.build_tables(grid, dem)
+            table_name = self.generate_name(
+                self.path,
+                suffix='.pckl',
+                topic=format
+            )
+            table_path = pathlib.Path(table_name)
+            if table_path.exists():
+                with open(table_path, 'rb') as f:
+                    tables = pickle.load(f)
+            else:
+                tables = subgrid.build_tables(grid, dem)
             logger.info('computing subgrid band')
             # this is also slow
             band = subgrid.compute_band(grid, dem, tables, data)
@@ -217,8 +229,44 @@ class UGrid(NetCDF):
             dst.write(band.filled(nodata), 1)
 
     def export(self, format):
-        grid = self.ugrid
+        """export dataset"""
+        if format == 'hull':
+            poly = self.to_polydata()
+            crs = geojson.crs.Named(
+                properties={
+                    "name": "urn:ogc:def:crs:EPSG::{:d}".format(
+                        self.src_epsg
+                    )
+                }
+            )
+            cells = [
+                list(poly.get_cell(idx).points)
+                for idx
+                in range(poly.number_of_cells)
+            ]
+            multi_polygon = geojson.MultiPolygon(coordinates=cells, crs=crs)
+            feature = geojson.Feature(id='grid', geometry=multi_polygon)
+            new_name = self.generate_name(
+                self.path,
+                suffix='.json',
+                topic=format
+            )
 
+            with open(new_name, 'w') as f:
+                geojson.dump(feature, f)
+        elif format == 'tables':
+            dem = read_dem(self.options['dem'])
+            grid = self.ugrid
+            tables = subgrid.build_tables(grid, dem)
+            new_name = self.generate_name(
+                self.path,
+                suffix='.pckl',
+                topic=format
+            )
+            with open(new_name, 'wb') as f:
+                pickle.dump(tables, f, pickle.HIGHEST_PROTOCOL)
+        else:
+            raise ValueError('unknown format: %s' % (format, ))
 
 
     @staticmethod

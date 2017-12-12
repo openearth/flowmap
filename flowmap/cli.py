@@ -197,6 +197,7 @@ def streamlines(dataset, timestep, **kwargs):
 )
 @click.option(
     "--method",
+    type=click.Choice(['subgrid', 'interpolate']),
     default="interpolate"
 )
 @click.option(
@@ -214,6 +215,39 @@ def subgrid(dataset, dem, timestep, method, **kwargs):
     else:
         raise ValueError('subgrid not yet supported for format', klass)
 
+@cli.command()
+@click.argument(
+    "dataset",
+    type=click.Path(
+        exists=True,
+        resolve_path=True
+    )
+)
+@click.argument(
+    "dem",
+    type=click.Path(
+        exists=True,
+        resolve_path=True
+    )
+)
+@click.option(
+    "--format",
+    type=click.Choice(['hull', 'tables'])
+)
+@click.option(
+    "--src_epsg",
+    type=int,
+    required=True
+)
+def export(dataset, dem, format, **kwargs):
+    """Create a geojson file"""
+    klass = flowmap.formats.get_format(dataset, **kwargs)
+    ds = klass(dataset, dem=dem, **kwargs)
+    logger.info("exporting grid")
+    if hasattr(ds, 'export'):
+        ds.export(format=format)
+    else:
+        raise ValueError('exporting not yet supported for format', klass)
 
 @cli.command()
 def formats():
