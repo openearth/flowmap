@@ -13,6 +13,7 @@ import pathlib
 import netCDF4
 import numpy as np
 import pyugrid
+import geojson
 
 # used for transforming into a vtk grid and for particles
 import tqdm
@@ -216,9 +217,30 @@ class UGrid(NetCDF):
             dst.write(band.filled(nodata), 1)
 
     def export(self, format):
-        grid = self.ugrid
+        if format == 'hull':
+            poly = self.to_polydata()
+            crs = geojson.crs.Named(
+                properties={
+                    "name": "urn:ogc:def:crs:EPSG::{:d}".format(
+                        self.src_epsg
+                    )
+                }
+            )
+            cells = [
+                list(poly.get_cell(idx).points)
+                for idx
+                in range(poly.number_of_cells)
+            ]
+            multi_polygon = geojson.MultiPolygon(coordinates=cells, crs=crs)
+            feature = geojson.Feature(id='grid', geometry=multi_polygon)
+            new_name = self.generate_name(
+                self.path,
+                suffix='.json',
+                topic=format
+            )
 
-
+            with open(new_name, 'w') as f:
+                geojson.dump(feature, f)
 
     @staticmethod
     def generate_name(path, suffix, topic=None, counter=None):
