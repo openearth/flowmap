@@ -2,9 +2,11 @@ import bisect
 import logging
 
 import numpy as np
+import numba
 import scipy.interpolate
 import pandas as pd
 import tqdm
+import geojson
 
 logger = logging.getLogger(__name__)
 
@@ -26,22 +28,21 @@ def data_for_idx(face_idx, dem, grid, data):
     return data
 
 
-def subgrid_waterdepth(face_idx, dem, grid, data, tables):
+def subgrid_compute(row, dem, method="waterlevel"):
     """get the subgrid waterdepth image"""
     # tables is a dataframe
-    hist = tables.loc[face_idx]
-    bins = hist["bins"]
+    bins = row["bins"]
 
     # if we don't have any volume table
     if bins is None:
         return None
-    volume_table = hist["volume_table"]
-    cum_volume_table = hist["cum_volume_table"]
+    volume_table = row["volume_table"]
+    cum_volume_table = row["cum_volume_table"]
 
-    dem_i = dem['band'][hist['slice']]
+    dem_i = dem['band'][row['slice']]
 
     # this part is once volume is known
-    vol_i = data['vol1'][face_idx]
+    vol_i = row['vol1']
 
     fill_idx = bisect.bisect(cum_volume_table, vol_i)
     remaining_volume = vol_i - cum_volume_table[fill_idx - 1]
@@ -54,12 +55,15 @@ def subgrid_waterdepth(face_idx, dem, grid, data, tables):
     else:
         remaining_volume_fraction = remaining_volume / volume_table[fill_idx]
         target_level = bins[fill_idx] + remaining_volume_fraction * (bins[fill_idx + 1] - bins[fill_idx])
-
-    # first cell that is not completely filled
-    waterdepth_i = np.zeros_like(dem_i)
-    idx = dem_i < target_level
-    waterdepth_i[idx] = (target_level - dem_i[idx])
-    return waterdepth_i
+    if method == 'waterlevel':
+        result = float(target_level)
+    elif method == 'waterdepth':
+        # first cell that is not completely filled
+        waterdepth_i = np.zeros_like(dem_i)
+        idx = dem_i < target_level
+        waterdepth_i[idx] = (target_level - dem_i[idx])
+        result = waterdepth_i
+    return result
 
 
 def build_interpolate(grid, values):
@@ -69,16 +73,14 @@ def build_interpolate(grid, values):
     L = scipy.interpolate.LinearNDInterpolator(face_centers, values)
     return L
 
-
+@numba.jit
 def build_tables(grid, dem):
     """compute volume tables per cell"""
 
     # compute cache of histograms per cell
-    idx = range(grid['face_coordinates'].shape[0])
-    faces = grid['face_coordinates'][idx]
-
+    faces = grid['face_coordinates']
     rows = []
-    for id_, face in zip(idx, tqdm.tqdm(faces)):
+    for id_, face in tqdm.tqdm(enumerate(faces), total=faces.shape[0], desc='table rows'):
         affine = dem['affine']
         face_px = dem['world2px'](face)
         face_px2slice = np.s_[
@@ -86,15 +88,15 @@ def build_tables(grid, dem):
             face_px[:, 0].min():face_px[:, 0].max()
         ]
         dem_i = dem['band'][face_px2slice]
-        if not dem_i.mask.all():
-            n, bins = np.histogram(dem_i.ravel(), bins=20)
+        if dem_i.mask.any():
+            n, bins = None, None
+            volume_table = None
+            cum_volume_table = None
+        else:
+            n, bins = np.histogram(dem_i, bins=20)
             n_cum = np.cumsum(n)
             volume_table = np.abs(affine.a * affine.e) * n_cum * np.diff(bins)
             cum_volume_table = np.cumsum(volume_table)
-        else:
-            n, bins = None, None
-            volume_table = None,
-            cum_volume_table = None
         extent = [
             face[:, 0].min(),
             face[:, 0].max(),
@@ -117,22 +119,67 @@ def build_tables(grid, dem):
     return tables
 
 
-def compute_band(grid, dem, tables, data):
+def compute_features(dem, tables, data, method='waterdepth'):
+    """compute subgrid waterdepth band"""
+
+    # register pandas progress
+    tqdm.tqdm(desc="panda is out for lunch!").pandas()
+
+    faces = list(tables.index)
+
+    tables['vol1'] = data['vol1']
+    tables['s1'] = data['s1']
+    tables['waterdepth'] = data['waterdepth']
+
+    results = []
+    # fill the in memory band
+    for face_idx in tqdm.tqdm(faces):
+        row = tables.loc[face_idx]
+        result = subgrid_compute(row, dem=dem, method=method)
+        results.append(result)
+    tables['subgrid_' + method] = results
+
+    def row2feature(row):
+        """convert row 2 features"""
+        coordinates = row['face'].mean(axis=0)
+        feature = geojson.Feature(
+            geometry=geojson.Point(
+                coordinates=tuple(coordinates)
+            ),
+            id=int(row.name),
+            properties={
+                "s1": float(row.s1),
+                "subgrid_" + method: float(row['subgrid_' + method]),
+                "vol1": float(row.vol1),
+                "waterdepth": float(row.waterdepth)
+            }
+        )
+        return feature
+    features = list(
+        tables.progress_apply(row2feature, axis=1)
+    )
+    collection = geojson.FeatureCollection(features=features)
+    return collection
+
+
+def compute_band(grid, dem, tables, data, method='waterdepth'):
     """compute subgrid waterdepth band"""
     excluded = []
     faces = list(tables.index)
 
-    # create a masked array
-    band = np.ma.masked_all_like(dem['band'])
+    # create a masked array, always return floats (band is sometimes int)
+    band = np.ma.masked_all(dem['band'].shape, dtype='float')
+
+    tables['vol1'] = data['vol1']
 
     # fill the in memory band
-    for face_idx in tqdm.tqdm_notebook(faces):
+    for face_idx in tqdm.tqdm(faces):
         row = tables.loc[face_idx]
-        waterdepth_i = subgrid_waterdepth(face_idx, dem=dem, grid=grid, data=data, tables=tables)
-        if waterdepth_i is None:
+        result = subgrid_compute(row, dem=dem, method=method)
+        if result is None:
             excluded.append(face_idx)
             continue
-        band[row['slice']] = waterdepth_i
+        band[row['slice']] = result
     logger.info("skipped %s cells (%s)", len(excluded), excluded)
     return band
 

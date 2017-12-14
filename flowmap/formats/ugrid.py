@@ -22,6 +22,7 @@ import skimage.draw
 from tvtk.api import tvtk
 import rasterio
 import rasterio.crs
+import numba
 
 from .netcdf import NetCDF
 from .. import particles
@@ -166,30 +167,35 @@ class UGrid(NetCDF):
         return is_grid
 
 
-    def subgrid(self, t, method):
+    def subgrid(self, t, method, format='.geojson'):
         """compute refined waterlevel using detailled dem, using subgrid or interpolate method"""
         dem = read_dem(self.options['dem'])
         grid = self.ugrid
         data = self.waterlevel(t)
-        if method == 'subgrid':
+        if method in ('waterdepth', 'waterlevel'):
 
-            logger.info('creating subgrid tables')
             # this is slow
             table_name = self.generate_name(
                 self.path,
                 suffix='.pckl',
-                topic=format
+                topic='tables'
             )
             table_path = pathlib.Path(table_name)
             if table_path.exists():
+                logger.info('reading subgrid tables from %s', table_path)
                 with open(table_path, 'rb') as f:
                     tables = pickle.load(f)
             else:
+                logger.info('creating subgrid tables')
                 tables = subgrid.build_tables(grid, dem)
             logger.info('computing subgrid band')
-            # this is also slow
-            band = subgrid.compute_band(grid, dem, tables, data)
+            if format == '.geojson':
+                feature_collection = subgrid.compute_features(dem, tables, data, method=method)
+            elif format == '.tiff':
+                # this is also slow
+                band = subgrid.compute_band(grid, dem, tables, data, method=method)
         elif method == 'interpolate':
+            format = '.tiff'
             values = np.c_[data['s1'], data['vol1'], data['waterdepth']]
             # create a grid mask for the dem
             is_grid = self.build_is_grid(dem)
@@ -202,31 +208,48 @@ class UGrid(NetCDF):
             band.mask = np.logical_or(band.mask, ~is_grid)
         else:
             raise ValueError('unknown method')
-        logger.info('writing subgrid band')
-        # use extreme value as nodata
-        nodata = np.finfo(band.dtype).min
-        options = dict(
-            dtype=str(band.dtype),
-            nodata=nodata,
-            count=1,
-            compress='lzw',
-            tiled=True,
-            blockxsize=256,
-            blockysize=256,
-            driver='GTiff',
-            affine=dem['affine'],
-            width=dem['width'],
-            height=dem['height'],
-            crs=rasterio.crs.CRS({'init': 'epsg:%d' % (self.src_epsg)})
-        )
+
         new_name = self.generate_name(
             self.path,
-            suffix='.tiff',
+            suffix=format,
             topic=method,
             counter=t
         )
-        with rasterio.open(str(new_name), 'w', **options) as dst:
-            dst.write(band.filled(nodata), 1)
+        if format == '.geojson':
+            logger.info('writing subgrid features')
+            # save featuress
+            crs = geojson.crs.Named(
+                properties={
+                    "name": "urn:ogc:def:crs:EPSG::{:d}".format(self.src_epsg)
+                }
+            )
+            feature_collection['crs'] = crs
+            with open(new_name, 'w') as f:
+                geojson.dump(feature_collection, f)
+        elif format == '.tiff':
+            logger.info('writing subgrid band')
+            # use extreme value as nodata
+            try:
+                nodata = np.finfo(band.dtype).min
+            except ValueError:
+                # for ints use a negative value
+                nodata = -99999
+            options = dict(
+                dtype=str(band.dtype),
+                nodata=nodata,
+                count=1,
+                compress='lzw',
+                tiled=True,
+                blockxsize=256,
+                blockysize=256,
+                driver='GTiff',
+                affine=dem['affine'],
+                width=dem['width'],
+                height=dem['height'],
+                crs=rasterio.crs.CRS({'init': 'epsg:%d' % (self.src_epsg)})
+            )
+            with rasterio.open(str(new_name), 'w', **options) as dst:
+                dst.write(band.filled(nodata), 1)
 
     def export(self, format):
         """export dataset"""
