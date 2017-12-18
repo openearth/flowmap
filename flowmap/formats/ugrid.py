@@ -21,12 +21,14 @@ import tqdm
 import skimage.draw
 from tvtk.api import tvtk
 import rasterio
+import rasterio.mask
 import rasterio.crs
 import numba
 
 from .netcdf import NetCDF
 from .. import particles
 from .. import subgrid
+from .. import topology
 from ..dem import read_dem
 
 
@@ -59,12 +61,14 @@ class UGrid(NetCDF):
         """Generate a ugrid grid from the input"""
         # TODO, lookup mesh name
         ugrid = pyugrid.UGrid.from_ncfile(self.path, 'mesh2d')
-        faces = ugrid.faces
-        faces_masked = np.ma.masked_array(faces, mask=not faces.fill)
+
+        faces = np.ma.asanyarray(ugrid.faces)
         face_centers = ugrid.face_coordinates
         nodes = ugrid.nodes
         # should be a ragged array
-        face_coordinates = np.array([nodes[face[~face.mask]] for face in faces])
+        face_coordinates = np.ma.asanyarray(nodes[faces])
+        face_coordinates[faces.mask] = np.ma.masked
+
         x = nodes[:, 0]
         y = nodes[:, 1]
         z = np.zeros_like(x)
@@ -72,7 +76,7 @@ class UGrid(NetCDF):
         return dict(
             face_coordinates=face_coordinates,
             face_centers=face_centers,
-            faces=faces_masked,
+            faces=faces,
             points=points
         )
 
@@ -154,17 +158,26 @@ class UGrid(NetCDF):
         # save the particles
         particles.export_lines(lines, str(new_name))
 
-    def build_is_grid(self, raster):
-        counts = (~self.ugrid['faces'].mask).sum(axis=1)
-        is_grid = np.zeros_like(raster['band'], dtype='bool')
-        polys = np.array([raster['world2px'](xy) for xy in self.ugrid['face_coordinates']])
-        for i, poly in tqdm.tqdm(enumerate(polys)):
-            # drawing grid mask
-            # TODO: check for triangles here...
-            rr, cc = skimage.draw.polygon(poly[:counts[i], 1], poly[:counts[i], 0])
-            is_grid[rr, cc] = True
+    def build_is_grid(self, dem):
+        is_grid = np.zeros_like(dem['band'], dtype='bool')
+        polydata = self.to_polydata()
+        hull = topology.concave_hull(polydata)
+        # convert hull to geojson
+        crs = geojson.crs.Named(
+            properties={
+                "name": "urn:ogc:def:crs:EPSG::{:d}".format(self.src_epsg)
+            }
+        )
+        geometry = geojson.Polygon(coordinates=[hull.tolist()], crs=crs)
+        # rasterize hull
+        is_grid = rasterio.mask.geometry_mask(
+            [geometry],
+            out_shape=dem['band'].shape,
+            transform=dem['affine'],
+            # inside is grid
+            invert=True
+        )
         return is_grid
-
 
     def subgrid(self, t, method, format='.geojson'):
         """compute refined waterlevel using detailled dem, using subgrid or interpolate method"""
