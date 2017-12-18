@@ -63,7 +63,8 @@ class UGrid(NetCDF):
         faces_masked = np.ma.masked_array(faces, mask=not faces.fill)
         face_centers = ugrid.face_coordinates
         nodes = ugrid.nodes
-        face_coordinates = nodes[faces]
+        # should be a ragged array
+        face_coordinates = np.array([nodes[face[~face.mask]] for face in faces])
         x = nodes[:, 0]
         y = nodes[:, 1]
         z = np.zeros_like(x)
@@ -87,10 +88,8 @@ class UGrid(NetCDF):
         cell_array = tvtk.CellArray()
 
         counts = (~faces.mask).sum(axis=1)
-        faces_zero_based = faces - 1
-        assert faces_zero_based.min() >= 0, 'expected 0 based faces_zero_based: %s based' % (faces_zero_based.min(), )
-        assert faces.min() >= 1, 'expected 1 based faces'
-        cell_idx = np.c_[counts, faces_zero_based.filled(-999)].ravel()
+        assert faces.min() >= 0, 'expected 0 based faces'
+        cell_idx = np.c_[counts, faces.filled(-999)].ravel()
         cell_idx = cell_idx[cell_idx != -999]
         cell_array.set_cells(n_cells, cell_idx)
 
