@@ -15,6 +15,7 @@ import netCDF4
 import numpy as np
 import pyugrid
 import geojson
+import pandas as pd
 
 # used for transforming into a vtk grid and for particles
 import tqdm
@@ -189,14 +190,13 @@ class UGrid(NetCDF):
             # this is slow
             table_name = self.generate_name(
                 self.path,
-                suffix='.pckl',
+                suffix='.h5',
                 topic='tables'
             )
             table_path = pathlib.Path(table_name)
             if table_path.exists():
                 logger.info('reading subgrid tables from %s', table_path)
-                with open(table_path, 'rb') as f:
-                    tables = pickle.load(f)
+                tables = pd.read_hdf(str(table_path), 'table')
             else:
                 logger.info('creating subgrid tables')
                 tables = subgrid.build_tables(grid, dem)
@@ -295,11 +295,10 @@ class UGrid(NetCDF):
             tables = subgrid.build_tables(grid, dem)
             new_name = self.generate_name(
                 self.path,
-                suffix='.pckl',
+                suffix='.h5',
                 topic=format
             )
-            with open(new_name, 'wb') as f:
-                pickle.dump(tables, f, pickle.HIGHEST_PROTOCOL)
+            tables.to_hdf(new_name, 'table')
         else:
             raise ValueError('unknown format: %s' % (format, ))
 

@@ -73,13 +73,14 @@ def build_interpolate(grid, values):
     L = scipy.interpolate.LinearNDInterpolator(face_centers, values)
     return L
 
-@numba.jit
+
 def build_tables(grid, dem):
     """compute volume tables per cell"""
 
     # compute cache of histograms per cell
     faces = grid['face_coordinates']
     rows = []
+    # TODO: run this in parallel (using concurrent futures)
     for id_, face in tqdm.tqdm(enumerate(faces), total=faces.shape[0], desc='table rows'):
         affine = dem['affine']
         face_px = dem['world2px'](face)
@@ -114,6 +115,7 @@ def build_tables(grid, dem):
             bins=bins
         )
         rows.append(record)
+
 
     tables = pd.DataFrame.from_records(rows).set_index('id')
     return tables
