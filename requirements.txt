@@ -13,4 +13,5 @@ rasterio==0.36.0
 Mako==1.0.7
 scikit-image==0.13.1
 geojson==2.3.0
-git+https://github.com/SiggyF/pyugrid.git@develop
+tables==3.4.2
+pyugrid==0.3.1
