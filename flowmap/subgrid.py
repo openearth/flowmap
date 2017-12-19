@@ -6,6 +6,7 @@ import scipy.interpolate
 import pandas as pd
 import tqdm
 import geojson
+import netCDF4
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +31,10 @@ def data_for_idx(face_idx, dem, grid, data):
 def subgrid_compute(row, dem, method="waterlevel"):
     """get the subgrid waterdepth image"""
     # tables is a dataframe
-    bins = row["bins"]
+    bin_edges = row["bin_edges"]
 
     # if we don't have any volume table
-    if bins is None:
+    if bin_edges is None:
         return None
     volume_table = row["volume_table"]
     cum_volume_table = row["cum_volume_table"]
@@ -50,10 +51,10 @@ def subgrid_compute(row, dem, method="waterlevel"):
 
     if fill_idx >= len(cum_volume_table) - 1:
         remaining = (vol_i - cum_volume_table[-1]) / face_area
-        target_level = bins[-1] + remaining
+        target_level = bin_edges[-1] + remaining
     else:
         remaining_volume_fraction = remaining_volume / volume_table[fill_idx]
-        target_level = bins[fill_idx] + remaining_volume_fraction * (bins[fill_idx + 1] - bins[fill_idx])
+        target_level = bin_edges[fill_idx] + remaining_volume_fraction * (bin_edges[fill_idx + 1] - bin_edges[fill_idx])
     if method == 'waterlevel':
         result = float(target_level)
     elif method == 'waterdepth':
@@ -89,13 +90,13 @@ def build_tables(grid, dem):
         ]
         dem_i = dem['band'][face_px2slice]
         if dem_i.mask.any():
-            n, bins = None, None
+            n, bin_edges = None, None
             volume_table = None
             cum_volume_table = None
         else:
-            n, bins = np.histogram(dem_i, bins=20)
+            n, bin_edges = np.histogram(dem_i, bins=20)
             n_cum = np.cumsum(n)
-            volume_table = np.abs(affine.a * affine.e) * n_cum * np.diff(bins)
+            volume_table = np.abs(affine.a * affine.e) * n_cum * np.diff(bin_edges)
             cum_volume_table = np.cumsum(volume_table)
         extent = [
             face[:, 0].min(),
@@ -111,7 +112,7 @@ def build_tables(grid, dem):
             cum_volume_table=cum_volume_table,
             n=n,
             extent=extent,
-            bins=bins
+            bin_edges=bin_edges
         )
         rows.append(record)
 
@@ -183,6 +184,75 @@ def compute_band(grid, dem, tables, data, method='waterdepth'):
         band[row['slice']] = result
     logger.info("skipped %s cells (%s)", len(excluded), excluded)
     return band
+
+
+def create_export(filename, n_cells, n_bins):
+    """create an export file for subgrid tables"""
+
+    dimensions = {
+        "cells": n_cells,
+        "bins": n_bins,
+        "bin_edges": n_bins + 1,
+        "two_times_two": 4
+    }
+    variables = [
+        {
+            "name": "bin_edges",
+            "dimensions": ("cells", "bin_edges"),
+            "long_name": "bin edges of topography histogram",
+            "type": "double"
+        },
+        {
+            "name": "cum_volume_table",
+            "dimensions": ("cells", "bins"),
+            "long_name": "cumulative volume table",
+            "type": "double"
+        },
+        {
+            "name": "volume_table",
+            "dimensions": ("cells", "bins"),
+            "long_name": "volume table",
+            "type": "double"
+        },
+        {
+            "name": "extent",
+            "dimensions": ("cells", "two_times_two"),
+            "long_name": "extent (left, right, lower, upper)",
+            "type": "double"
+        },
+        {
+            "name": "n_per_bin",
+            "dimensions": ("cells", "bins"),
+            "long_name": "topography histogram",
+            "type": "int"
+        },
+        {
+            "name": "slice",
+            "dimensions": ("cells", "two_times_two"),
+            "long_name": "slice (row start, stop, colum start stop)",
+            "type": "int"
+        }
+    ]
+    with netCDF4.Dataset(filename, 'w') as ds:
+        for name, size in dimensions.items():
+            ds.createDimension(name, size)
+        for var in variables:
+            ncvar = ds.createVariable(var['name'], datatype=var['type'], dimensions=var['dimensions'])
+            ncvar.setncattr('long_name', var['long_name'])
+
+
+def export(filename, tables):
+    """store tables in netcdf file, create file with create_export"""
+    with netCDF4.Dataset(filename, 'r+') as ds:
+        for i, row in tqdm.tqdm(tables.iterrows(), total=len(tables)):
+            for var in ['bin_edges', 'cum_volume_table', 'volume_table', 'extent']:
+                ds.variables[var][i] = row[var]
+            ds.variables['slice'] = [
+                row.slice[0].start,
+                row.slice[0].stop,
+                row.slice[1].start,
+                row.slice[1].stop
+            ]
 
 
 def compute_interpolated(L, dem, data, s=None):
