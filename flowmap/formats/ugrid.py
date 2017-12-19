@@ -190,13 +190,13 @@ class UGrid(NetCDF):
             # this is slow
             table_name = self.generate_name(
                 self.path,
-                suffix='.h5',
+                suffix='.nc',
                 topic='tables'
             )
             table_path = pathlib.Path(table_name)
             if table_path.exists():
                 logger.info('reading subgrid tables from %s', table_path)
-                tables = pd.read_hdf(str(table_path), 'table')
+                tables = subgrid.import_tables(str(table_path))
             else:
                 logger.info('creating subgrid tables')
                 tables = subgrid.build_tables(grid, dem)
@@ -295,10 +295,11 @@ class UGrid(NetCDF):
             tables = subgrid.build_tables(grid, dem)
             new_name = self.generate_name(
                 self.path,
-                suffix='.h5',
+                suffix='.nc',
                 topic=format
             )
-            tables.to_hdf(new_name, 'table')
+            subgrid.create_export(new_name, n_cells=len(tables), n_bins=20)
+            subgrid.export_tables(new_name, tables)
         else:
             raise ValueError('unknown format: %s' % (format, ))
 

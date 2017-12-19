@@ -90,12 +90,12 @@ def build_tables(grid, dem):
         ]
         dem_i = dem['band'][face_px2slice]
         if dem_i.mask.any():
-            n, bin_edges = None, None
+            n_per_bin, bin_edges = None, None
             volume_table = None
             cum_volume_table = None
         else:
-            n, bin_edges = np.histogram(dem_i, bins=20)
-            n_cum = np.cumsum(n)
+            n_per_bin, bin_edges = np.histogram(dem_i, bins=20)
+            n_cum = np.cumsum(n_per_bin)
             volume_table = np.abs(affine.a * affine.e) * n_cum * np.diff(bin_edges)
             cum_volume_table = np.cumsum(volume_table)
         extent = [
@@ -110,12 +110,11 @@ def build_tables(grid, dem):
             face=face,
             volume_table=volume_table,
             cum_volume_table=cum_volume_table,
-            n=n,
+            n_per_bin=n_per_bin,
             extent=extent,
             bin_edges=bin_edges
         )
         rows.append(record)
-
 
     tables = pd.DataFrame.from_records(rows).set_index('id')
     return tables
@@ -233,26 +232,53 @@ def create_export(filename, n_cells, n_bins):
             "type": "int"
         }
     ]
+
     with netCDF4.Dataset(filename, 'w') as ds:
         for name, size in dimensions.items():
             ds.createDimension(name, size)
         for var in variables:
-            ncvar = ds.createVariable(var['name'], datatype=var['type'], dimensions=var['dimensions'])
+            ncvar = ds.createVariable(
+                var['name'],
+                datatype=var['type'],
+                dimensions=var['dimensions']
+            )
             ncvar.setncattr('long_name', var['long_name'])
 
 
-def export(filename, tables):
+def export_tables(filename, tables):
     """store tables in netcdf file, create file with create_export"""
     with netCDF4.Dataset(filename, 'r+') as ds:
         for i, row in tqdm.tqdm(tables.iterrows(), total=len(tables)):
-            for var in ['bin_edges', 'cum_volume_table', 'volume_table', 'extent']:
+            for var in ['bin_edges', 'cum_volume_table', 'volume_table', 'extent', 'n_per_bin']:
                 ds.variables[var][i] = row[var]
-            ds.variables['slice'] = [
+            ds.variables['slice'][i] = [
                 row.slice[0].start,
                 row.slice[0].stop,
                 row.slice[1].start,
                 row.slice[1].stop
             ]
+
+
+def import_tables(filename):
+    """import tables from netcdf table dump"""
+    with netCDF4.Dataset('test.nc') as ds:
+        vars = {}
+        index = np.arange(ds.variables['bin_edges'].shape[0])
+        for var in [
+                'bin_edges', 'cum_volume_table',
+                'volume_table', 'extent', 'n_per_bin'
+        ]:
+            vars[var] = list(ds.variables[var][:])
+        slice_arr = ds.variables['slice'][:]
+    # convert slices to slice objects
+    fun = lambda x: (slice(x[0], x[1]), slice(x[2], x[3]))
+    vars['slice'] = list(np.ma.apply_along_axis(
+        fun,
+        1,
+        slice_arr
+    ))
+    tables = pd.DataFrame(vars, index=index)
+    return tables
 
 
 def compute_interpolated(L, dem, data, s=None):
