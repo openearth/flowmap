@@ -82,6 +82,12 @@ def build_tables(grid, dem):
     rows = []
     # TODO: run this in parallel (using concurrent futures)
     for id_, face in tqdm.tqdm(enumerate(faces), total=faces.shape[0], desc='table rows'):
+        # Use this for faster debugging of triangles
+        # if id_ < 40000:
+        #     continue
+        # if id_ > 40100:
+        #     break
+
         affine = dem['affine']
         face_px = dem['world2px'](face)
         face_px2slice = np.s_[
@@ -115,6 +121,8 @@ def build_tables(grid, dem):
             bin_edges=bin_edges
         )
         rows.append(record)
+
+
 
     tables = pd.DataFrame.from_records(rows).set_index('id')
     return tables
@@ -250,7 +258,12 @@ def export_tables(filename, tables):
     with netCDF4.Dataset(filename, 'r+') as ds:
         for i, row in tqdm.tqdm(tables.iterrows(), total=len(tables)):
             for var in ['bin_edges', 'cum_volume_table', 'volume_table', 'extent', 'n_per_bin']:
-                ds.variables[var][i] = row[var]
+                val = row[var]
+                # skip none
+                if val is None:
+                    continue
+
+                ds.variables[var][i] = val
             ds.variables['slice'][i] = [
                 row.slice[0].start,
                 row.slice[0].stop,
