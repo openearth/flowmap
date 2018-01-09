@@ -2,7 +2,7 @@
 # This file will be regenerated if you run travis_pypi_setup.py
 
 language: python
-python: 3.5
+python: 3.6
 
 # command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
 install:
@@ -10,6 +10,7 @@ install:
   # install requirements, one way or another
   - while read requirement; do conda install --yes $requirement || pip install $requirement; done < requirements.txt
   - conda install -c conda-forge xerces-c==3.2.0 gdal libgdal rasterio poppler==0.52.0
+  # hack to fix environment https://github.com/ContinuumIO/anaconda-issues/issues/1450
 
 before_install:
   - sudo apt-get update
@@ -35,6 +36,7 @@ script: make test
 
 # After you create the Github repo and add it to Travis, run the
 # travis_pypi_setup.py script to finish PyPI deployment setup
+group: deprecated-2017Q4
 deploy:
   provider: pypi
   distributions: sdist bdist_wheel
@@ -44,4 +46,4 @@ deploy:
   on:
     tags: true
     repo: openearth/flowmap
-    condition: $TOXENV == py35
+    condition: $TOXENV == py36

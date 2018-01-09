@@ -5,6 +5,8 @@ import numpy as np
 import scipy.interpolate
 import pandas as pd
 import tqdm
+import geojson
+import netCDF4
 
 logger = logging.getLogger(__name__)
 
@@ -26,22 +28,21 @@ def data_for_idx(face_idx, dem, grid, data):
     return data
 
 
-def subgrid_waterdepth(face_idx, dem, grid, data, tables):
+def subgrid_compute(row, dem, method="waterlevel"):
     """get the subgrid waterdepth image"""
     # tables is a dataframe
-    hist = tables.loc[face_idx]
-    bins = hist["bins"]
+    bin_edges = row["bin_edges"]
 
     # if we don't have any volume table
-    if bins is None:
+    if bin_edges is None:
         return None
-    volume_table = hist["volume_table"]
-    cum_volume_table = hist["cum_volume_table"]
+    volume_table = row["volume_table"]
+    cum_volume_table = row["cum_volume_table"]
 
-    dem_i = hist['dem']
+    dem_i = dem['band'][row['slice']]
 
     # this part is once volume is known
-    vol_i = data['vol1'][face_idx]
+    vol_i = row['vol1']
 
     fill_idx = bisect.bisect(cum_volume_table, vol_i)
     remaining_volume = vol_i - cum_volume_table[fill_idx - 1]
@@ -50,16 +51,19 @@ def subgrid_waterdepth(face_idx, dem, grid, data, tables):
 
     if fill_idx >= len(cum_volume_table) - 1:
         remaining = (vol_i - cum_volume_table[-1]) / face_area
-        target_level = bins[-1] + remaining
+        target_level = bin_edges[-1] + remaining
     else:
         remaining_volume_fraction = remaining_volume / volume_table[fill_idx]
-        target_level = bins[fill_idx] + remaining_volume_fraction * (bins[fill_idx + 1] - bins[fill_idx])
-
-    # first cell that is not completely filled
-    waterdepth_i = np.zeros_like(dem_i)
-    idx = dem_i < target_level
-    waterdepth_i[idx] = (target_level - dem_i[idx])
-    return waterdepth_i
+        target_level = bin_edges[fill_idx] + remaining_volume_fraction * (bin_edges[fill_idx + 1] - bin_edges[fill_idx])
+    if method == 'waterlevel':
+        result = float(target_level)
+    elif method == 'waterdepth':
+        # first cell that is not completely filled
+        waterdepth_i = np.zeros_like(dem_i)
+        idx = dem_i < target_level
+        waterdepth_i[idx] = (target_level - dem_i[idx])
+        result = waterdepth_i
+    return result
 
 
 def build_interpolate(grid, values):
@@ -74,10 +78,16 @@ def build_tables(grid, dem):
     """compute volume tables per cell"""
 
     # compute cache of histograms per cell
-    idx = range(grid['face_coordinates'].shape[0])
-    faces = grid['face_coordinates'][idx]
-    tables = {}
-    for id_, face in zip(idx, tqdm.tqdm(faces)):
+    faces = grid['face_coordinates']
+    rows = []
+    # TODO: run this in parallel (using concurrent futures)
+    for id_, face in tqdm.tqdm(enumerate(faces), total=faces.shape[0], desc='table rows'):
+        # Use this for faster debugging of triangles
+        # if id_ < 40000:
+        #     continue
+        # if id_ > 40100:
+        #     break
+
         affine = dem['affine']
         face_px = dem['world2px'](face)
         face_px2slice = np.s_[
@@ -85,15 +95,15 @@ def build_tables(grid, dem):
             face_px[:, 0].min():face_px[:, 0].max()
         ]
         dem_i = dem['band'][face_px2slice]
-        if not dem_i.mask.all():
-            n, bins = np.histogram(dem_i.ravel(), bins=20)
-            n_cum = np.cumsum(n)
-            volume_table = np.abs(affine.a * affine.e) * n_cum * np.diff(bins)
-            cum_volume_table = np.cumsum(volume_table)
-        else:
-            n, bins = None, None
-            volume_table = None,
+        if dem_i.mask.any():
+            n_per_bin, bin_edges = None, None
+            volume_table = None
             cum_volume_table = None
+        else:
+            n_per_bin, bin_edges = np.histogram(dem_i, bins=20)
+            n_cum = np.cumsum(n_per_bin)
+            volume_table = np.abs(affine.a * affine.e) * n_cum * np.diff(bin_edges)
+            cum_volume_table = np.cumsum(volume_table)
         extent = [
             face[:, 0].min(),
             face[:, 0].max(),
@@ -104,37 +114,184 @@ def build_tables(grid, dem):
             id=id_,
             slice=face_px2slice,
             face=face,
-            dem=dem_i,
             volume_table=volume_table,
             cum_volume_table=cum_volume_table,
-            n=n,
+            n_per_bin=n_per_bin,
             extent=extent,
-            bins=bins
+            bin_edges=bin_edges
         )
-        tables[id_] = record
+        rows.append(record)
 
-    tables = pd.DataFrame.from_records(list(tables.values())).set_index('id')
+
+
+    tables = pd.DataFrame.from_records(rows).set_index('id')
     return tables
 
 
-def compute_band(grid, dem, tables, data):
+def compute_features(dem, tables, data, method='waterdepth'):
+    """compute subgrid waterdepth band"""
+
+    # register pandas progress
+    tqdm.tqdm(desc="panda is out for lunch!").pandas()
+
+    faces = list(tables.index)
+
+    tables['vol1'] = data['vol1']
+    tables['s1'] = data['s1']
+    tables['waterdepth'] = data['waterdepth']
+
+    results = []
+    # fill the in memory band
+    for face_idx in tqdm.tqdm(faces):
+        row = tables.loc[face_idx]
+        result = subgrid_compute(row, dem=dem, method=method)
+        results.append(result)
+    tables['subgrid_' + method] = results
+
+    def row2feature(row):
+        """convert row 2 features"""
+        coordinates = row['face'].mean(axis=0)
+        feature = geojson.Feature(
+            geometry=geojson.Point(
+                coordinates=tuple(coordinates)
+            ),
+            id=int(row.name),
+            properties={
+                "s1": float(row.s1),
+                "subgrid_" + method: float(row['subgrid_' + method]),
+                "vol1": float(row.vol1),
+                "waterdepth": float(row.waterdepth)
+            }
+        )
+        return feature
+    features = list(
+        tables.progress_apply(row2feature, axis=1)
+    )
+    collection = geojson.FeatureCollection(features=features)
+    return collection
+
+
+def compute_band(grid, dem, tables, data, method='waterdepth'):
     """compute subgrid waterdepth band"""
     excluded = []
     faces = list(tables.index)
 
-    # create a masked array
-    band = np.ma.masked_all_like(dem['band'])
+    # create a masked array, always return floats (band is sometimes int)
+    band = np.ma.masked_all(dem['band'].shape, dtype='float')
+
+    tables['vol1'] = data['vol1']
 
     # fill the in memory band
-    for face_idx in tqdm.tqdm_notebook(faces):
+    for face_idx in tqdm.tqdm(faces):
         row = tables.loc[face_idx]
-        waterdepth_i = subgrid_waterdepth(face_idx, dem=dem, grid=grid, data=data, tables=tables)
-        if waterdepth_i is None:
+        result = subgrid_compute(row, dem=dem, method=method)
+        if result is None:
             excluded.append(face_idx)
             continue
-        band[row['slice']] = waterdepth_i
+        band[row['slice']] = result
     logger.info("skipped %s cells (%s)", len(excluded), excluded)
     return band
+
+
+def create_export(filename, n_cells, n_bins):
+    """create an export file for subgrid tables"""
+
+    dimensions = {
+        "cells": n_cells,
+        "bins": n_bins,
+        "bin_edges": n_bins + 1,
+        "two_times_two": 4
+    }
+    variables = [
+        {
+            "name": "bin_edges",
+            "dimensions": ("cells", "bin_edges"),
+            "long_name": "bin edges of topography histogram",
+            "type": "double"
+        },
+        {
+            "name": "cum_volume_table",
+            "dimensions": ("cells", "bins"),
+            "long_name": "cumulative volume table",
+            "type": "double"
+        },
+        {
+            "name": "volume_table",
+            "dimensions": ("cells", "bins"),
+            "long_name": "volume table",
+            "type": "double"
+        },
+        {
+            "name": "extent",
+            "dimensions": ("cells", "two_times_two"),
+            "long_name": "extent (left, right, lower, upper)",
+            "type": "double"
+        },
+        {
+            "name": "n_per_bin",
+            "dimensions": ("cells", "bins"),
+            "long_name": "topography histogram",
+            "type": "int"
+        },
+        {
+            "name": "slice",
+            "dimensions": ("cells", "two_times_two"),
+            "long_name": "slice (row start, stop, colum start stop)",
+            "type": "int"
+        }
+    ]
+
+    with netCDF4.Dataset(filename, 'w') as ds:
+        for name, size in dimensions.items():
+            ds.createDimension(name, size)
+        for var in variables:
+            ncvar = ds.createVariable(
+                var['name'],
+                datatype=var['type'],
+                dimensions=var['dimensions']
+            )
+            ncvar.setncattr('long_name', var['long_name'])
+
+
+def export_tables(filename, tables):
+    """store tables in netcdf file, create file with create_export"""
+    with netCDF4.Dataset(filename, 'r+') as ds:
+        for i, row in tqdm.tqdm(tables.iterrows(), total=len(tables)):
+            for var in ['bin_edges', 'cum_volume_table', 'volume_table', 'extent', 'n_per_bin']:
+                val = row[var]
+                # skip none
+                if val is None:
+                    continue
+
+                ds.variables[var][i] = val
+            ds.variables['slice'][i] = [
+                row.slice[0].start,
+                row.slice[0].stop,
+                row.slice[1].start,
+                row.slice[1].stop
+            ]
+
+
+def import_tables(filename):
+    """import tables from netcdf table dump"""
+    with netCDF4.Dataset('test.nc') as ds:
+        vars = {}
+        index = np.arange(ds.variables['bin_edges'].shape[0])
+        for var in [
+                'bin_edges', 'cum_volume_table',
+                'volume_table', 'extent', 'n_per_bin'
+        ]:
+            vars[var] = list(ds.variables[var][:])
+        slice_arr = ds.variables['slice'][:]
+    # convert slices to slice objects
+    fun = lambda x: (slice(x[0], x[1]), slice(x[2], x[3]))
+    vars['slice'] = list(np.ma.apply_along_axis(
+        fun,
+        1,
+        slice_arr
+    ))
+    tables = pd.DataFrame(vars, index=index)
+    return tables
 
 
 def compute_interpolated(L, dem, data, s=None):

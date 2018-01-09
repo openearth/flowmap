@@ -15,17 +15,21 @@ import netCDF4
 import numpy as np
 import pyugrid
 import geojson
+import pandas as pd
 
 # used for transforming into a vtk grid and for particles
 import tqdm
 import skimage.draw
 from tvtk.api import tvtk
 import rasterio
+import rasterio.mask
 import rasterio.crs
+import numba
 
 from .netcdf import NetCDF
 from .. import particles
 from .. import subgrid
+from .. import topology
 from ..dem import read_dem
 
 
@@ -58,12 +62,14 @@ class UGrid(NetCDF):
         """Generate a ugrid grid from the input"""
         # TODO, lookup mesh name
         ugrid = pyugrid.UGrid.from_ncfile(self.path, 'mesh2d')
-        faces = ugrid.faces
-        faces_masked = np.ma.masked_array(faces, mask=not faces.fill)
+
+        faces = np.ma.asanyarray(ugrid.faces)
         face_centers = ugrid.face_coordinates
         nodes = ugrid.nodes
         # should be a ragged array
-        face_coordinates = np.array([nodes[face[~face.mask]] for face in faces])
+        face_coordinates = np.ma.asanyarray(nodes[faces])
+        face_coordinates[faces.mask] = np.ma.masked
+
         x = nodes[:, 0]
         y = nodes[:, 1]
         z = np.zeros_like(x)
@@ -71,7 +77,7 @@ class UGrid(NetCDF):
         return dict(
             face_coordinates=face_coordinates,
             face_centers=face_centers,
-            faces=faces_masked,
+            faces=faces,
             points=points
         )
 
@@ -153,42 +159,55 @@ class UGrid(NetCDF):
         # save the particles
         particles.export_lines(lines, str(new_name))
 
-    def build_is_grid(self, raster):
-        counts = (~self.ugrid['faces'].mask).sum(axis=1)
-        is_grid = np.zeros_like(raster['band'], dtype='bool')
-        polys = np.array([raster['world2px'](xy) for xy in self.ugrid['face_coordinates']])
-        for i, poly in tqdm.tqdm(enumerate(polys)):
-            # drawing grid mask
-            # TODO: check for triangles here...
-            rr, cc = skimage.draw.polygon(poly[:counts[i], 1], poly[:counts[i], 0])
-            is_grid[rr, cc] = True
+    def build_is_grid(self, dem):
+        is_grid = np.zeros_like(dem['band'], dtype='bool')
+        polydata = self.to_polydata()
+        hull = topology.concave_hull(polydata)
+        # convert hull to geojson
+        crs = geojson.crs.Named(
+            properties={
+                "name": "urn:ogc:def:crs:EPSG::{:d}".format(self.src_epsg)
+            }
+        )
+        geometry = geojson.Polygon(coordinates=[hull.tolist()], crs=crs)
+        # rasterize hull
+        is_grid = rasterio.mask.geometry_mask(
+            [geometry],
+            out_shape=dem['band'].shape,
+            transform=dem['affine'],
+            # inside is grid
+            invert=True
+        )
         return is_grid
 
-
-    def subgrid(self, t, method):
+    def subgrid(self, t, method, format='.geojson'):
         """compute refined waterlevel using detailled dem, using subgrid or interpolate method"""
         dem = read_dem(self.options['dem'])
         grid = self.ugrid
         data = self.waterlevel(t)
-        if method == 'subgrid':
+        if method in ('waterdepth', 'waterlevel'):
 
-            logger.info('creating subgrid tables')
             # this is slow
             table_name = self.generate_name(
                 self.path,
-                suffix='.pckl',
-                topic=format
+                suffix='.nc',
+                topic='tables'
             )
             table_path = pathlib.Path(table_name)
             if table_path.exists():
-                with open(table_path, 'rb') as f:
-                    tables = pickle.load(f)
+                logger.info('reading subgrid tables from %s', table_path)
+                tables = subgrid.import_tables(str(table_path))
             else:
+                logger.info('creating subgrid tables')
                 tables = subgrid.build_tables(grid, dem)
             logger.info('computing subgrid band')
-            # this is also slow
-            band = subgrid.compute_band(grid, dem, tables, data)
+            if format == '.geojson':
+                feature_collection = subgrid.compute_features(dem, tables, data, method=method)
+            elif format == '.tiff':
+                # this is also slow
+                band = subgrid.compute_band(grid, dem, tables, data, method=method)
         elif method == 'interpolate':
+            format = '.tiff'
             values = np.c_[data['s1'], data['vol1'], data['waterdepth']]
             # create a grid mask for the dem
             is_grid = self.build_is_grid(dem)
@@ -201,31 +220,48 @@ class UGrid(NetCDF):
             band.mask = np.logical_or(band.mask, ~is_grid)
         else:
             raise ValueError('unknown method')
-        logger.info('writing subgrid band')
-        # use extreme value as nodata
-        nodata = np.finfo(band.dtype).min
-        options = dict(
-            dtype=str(band.dtype),
-            nodata=nodata,
-            count=1,
-            compress='lzw',
-            tiled=True,
-            blockxsize=256,
-            blockysize=256,
-            driver='GTiff',
-            affine=dem['affine'],
-            width=dem['width'],
-            height=dem['height'],
-            crs=rasterio.crs.CRS({'init': 'epsg:%d' % (self.src_epsg)})
-        )
+
         new_name = self.generate_name(
             self.path,
-            suffix='.tiff',
+            suffix=format,
             topic=method,
             counter=t
         )
-        with rasterio.open(str(new_name), 'w', **options) as dst:
-            dst.write(band.filled(nodata), 1)
+        if format == '.geojson':
+            logger.info('writing subgrid features')
+            # save featuress
+            crs = geojson.crs.Named(
+                properties={
+                    "name": "urn:ogc:def:crs:EPSG::{:d}".format(self.src_epsg)
+                }
+            )
+            feature_collection['crs'] = crs
+            with open(new_name, 'w') as f:
+                geojson.dump(feature_collection, f)
+        elif format == '.tiff':
+            logger.info('writing subgrid band')
+            # use extreme value as nodata
+            try:
+                nodata = np.finfo(band.dtype).min
+            except ValueError:
+                # for ints use a negative value
+                nodata = -99999
+            options = dict(
+                dtype=str(band.dtype),
+                nodata=nodata,
+                count=1,
+                compress='lzw',
+                tiled=True,
+                blockxsize=256,
+                blockysize=256,
+                driver='GTiff',
+                affine=dem['affine'],
+                width=dem['width'],
+                height=dem['height'],
+                crs=rasterio.crs.CRS({'init': 'epsg:%d' % (self.src_epsg)})
+            )
+            with rasterio.open(str(new_name), 'w', **options) as dst:
+                dst.write(band.filled(nodata), 1)
 
     def export(self, format):
         """export dataset"""
@@ -259,11 +295,11 @@ class UGrid(NetCDF):
             tables = subgrid.build_tables(grid, dem)
             new_name = self.generate_name(
                 self.path,
-                suffix='.pckl',
+                suffix='.nc',
                 topic=format
             )
-            with open(new_name, 'wb') as f:
-                pickle.dump(tables, f, pickle.HIGHEST_PROTOCOL)
+            subgrid.create_export(new_name, n_cells=len(tables), n_bins=20)
+            subgrid.export_tables(new_name, tables)
         else:
             raise ValueError('unknown format: %s' % (format, ))
 
