@@ -274,7 +274,7 @@ def export_tables(filename, tables):
 
 def import_tables(filename):
     """import tables from netcdf table dump"""
-    with netCDF4.Dataset('test.nc') as ds:
+    with netCDF4.Dataset(filename) as ds:
         vars = {}
         index = np.arange(ds.variables['bin_edges'].shape[0])
         for var in [
