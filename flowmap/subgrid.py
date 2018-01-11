@@ -38,8 +38,14 @@ def subgrid_compute(row, dem, method="waterlevel"):
         return None
     volume_table = row["volume_table"]
     cum_volume_table = row["cum_volume_table"]
-
-    dem_i = dem['band'][row['slice']]
+    if 'slice' in row:
+        dem_i = dem['band'][row['slice']]
+    else:
+        # imported data (creating slice objects is a bit slow)
+        dem_i = dem['band'][
+            row['slice_0']:row['slice_2'],
+            row['slice_1']:row['slice_3']
+        ]
 
     # this part is once volume is known
     vol_i = row['vol1']
@@ -281,15 +287,24 @@ def import_tables(filename):
                 'bin_edges', 'cum_volume_table',
                 'volume_table', 'extent', 'n_per_bin'
         ]:
-            vars[var] = list(ds.variables[var][:])
+            arr = ds.variables[var][:]
+            if len(arr.shape) > 1:
+                vars[var] = list(arr)
+            else:
+                vars[var] = arr
         slice_arr = ds.variables['slice'][:]
     # convert slices to slice objects
-    fun = lambda x: (slice(x[0], x[1]), slice(x[2], x[3]))
-    vars['slice'] = list(np.ma.apply_along_axis(
-        fun,
-        1,
-        slice_arr
-    ))
+    # TODO: this is a bit slow (several minutes)
+    # fun = lambda x: (slice(x[0], x[1]), slice(x[2], x[3]))
+    # vars['slice'] = list(np.ma.apply_along_axis(
+    #     fun,
+    #     1,
+    #     slice_arr
+    # ))
+    vars['slice_0'] = slice_arr[:, 0]
+    vars['slice_1'] = slice_arr[:, 1]
+    vars['slice_2'] = slice_arr[:, 2]
+    vars['slice_3'] = slice_arr[:, 3]
     tables = pd.DataFrame(vars, index=index)
     return tables
 
