@@ -202,7 +202,7 @@ class UGrid(NetCDF):
                 tables = subgrid.build_tables(grid, dem)
             logger.info('computing subgrid band')
             if format == '.geojson':
-                feature_collection = subgrid.compute_features(dem, tables, data, method=method)
+                feature_collection = subgrid.compute_features(grid, dem, tables, data, method=method)
             elif format == '.tiff':
                 # this is also slow
                 band = subgrid.compute_band(grid, dem, tables, data, method=method)

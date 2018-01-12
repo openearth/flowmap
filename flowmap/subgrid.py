@@ -38,14 +38,11 @@ def subgrid_compute(row, dem, method="waterlevel"):
         return None
     volume_table = row["volume_table"]
     cum_volume_table = row["cum_volume_table"]
-    if 'slice' in row:
-        dem_i = dem['band'][row['slice']]
-    else:
-        # imported data (creating slice objects is a bit slow)
-        dem_i = dem['band'][
-            row['slice_0']:row['slice_2'],
-            row['slice_1']:row['slice_3']
-        ]
+    # imported data (creating slice objects is a bit slow)
+    dem_i = dem['band'][
+        row['slice'][0]:row['slice'][1],
+        row['slice'][2]:row['slice'][3]
+    ]
 
     # this part is once volume is known
     vol_i = row['vol1']
@@ -89,12 +86,14 @@ def build_tables(grid, dem):
     # TODO: run this in parallel (using concurrent futures)
     for id_, face in tqdm.tqdm(enumerate(faces), total=faces.shape[0], desc='table rows'):
         # Use this for faster debugging of triangles
-        # if id_ < 40000:
+        # if id_ < 4700:
         #     continue
-        # if id_ > 40100:
+        # if id_ > 4800:
         #     break
 
         affine = dem['affine']
+        # remove masked coordinates
+        face = face[~face.mask.any(axis=1), :]
         face_px = dem['world2px'](face)
         face_px2slice = np.s_[
             face_px[:, 1].min():face_px[:, 1].max(),
@@ -134,13 +133,14 @@ def build_tables(grid, dem):
     return tables
 
 
-def compute_features(dem, tables, data, method='waterdepth'):
+def compute_features(grid, dem, tables, data, method='waterdepth'):
     """compute subgrid waterdepth band"""
 
     # register pandas progress
     tqdm.tqdm(desc="panda is out for lunch!").pandas()
 
-    faces = list(tables.index)
+    # list of face indices
+    face_ids = np.arange(tables['volume_table'].shape[0])
 
     tables['vol1'] = data['vol1']
     tables['s1'] = data['s1']
@@ -148,31 +148,33 @@ def compute_features(dem, tables, data, method='waterdepth'):
 
     results = []
     # fill the in memory band
-    for face_idx in tqdm.tqdm(faces):
-        row = tables.loc[face_idx]
+    for face_id in tqdm.tqdm(face_ids):
+        row = {}
+        for key, var in tables.items():
+            row[key] = var[face_id]
+
         result = subgrid_compute(row, dem=dem, method=method)
         results.append(result)
     tables['subgrid_' + method] = results
 
-    def row2feature(row):
+    features = []
+    for face_id in tqdm.tqdm(face_ids):
         """convert row 2 features"""
-        coordinates = row['face'].mean(axis=0)
+        face = grid['faces'][face_id]
+        coordinates = face.mean(axis=0)
         feature = geojson.Feature(
             geometry=geojson.Point(
                 coordinates=tuple(coordinates)
             ),
-            id=int(row.name),
+            id=face_id,
             properties={
-                "s1": float(row.s1),
-                "subgrid_" + method: float(row['subgrid_' + method]),
-                "vol1": float(row.vol1),
-                "waterdepth": float(row.waterdepth)
+                "s1": data['s1'][face_id],
+                "subgrid_" + method: tables['subgrid_' + method][face_id],
+                "vol1": tables['vol1'][face_id],
+                "waterdepth": tables['waterdepth'][face_id]
             }
         )
-        return feature
-    features = list(
-        tables.progress_apply(row2feature, axis=1)
-    )
+        features.append(feature)
     collection = geojson.FeatureCollection(features=features)
     return collection
 
@@ -262,8 +264,11 @@ def create_export(filename, n_cells, n_bins):
 def export_tables(filename, tables):
     """store tables in netcdf file, create file with create_export"""
     with netCDF4.Dataset(filename, 'r+') as ds:
-        for i, row in tqdm.tqdm(tables.iterrows(), total=len(tables)):
-            for var in ['bin_edges', 'cum_volume_table', 'volume_table', 'extent', 'n_per_bin']:
+        for i, row in tqdm.tqdm(tables.reset_index().iterrows(), total=len(tables)):
+            for var in [
+                    'bin_edges', 'cum_volume_table', 'volume_table',
+                    'extent', 'n_per_bin'
+            ]:
                 val = row[var]
                 # skip none
                 if val is None:
@@ -278,34 +283,26 @@ def export_tables(filename, tables):
             ]
 
 
-def import_tables(filename):
+def import_tables(filename, arrays=True):
     """import tables from netcdf table dump"""
     with netCDF4.Dataset(filename) as ds:
         vars = {}
         index = np.arange(ds.variables['bin_edges'].shape[0])
         for var in [
                 'bin_edges', 'cum_volume_table',
-                'volume_table', 'extent', 'n_per_bin'
+                'volume_table', 'extent', 'n_per_bin',
+                'slice'
         ]:
             arr = ds.variables[var][:]
-            if len(arr.shape) > 1:
-                vars[var] = list(arr)
-            else:
-                vars[var] = arr
-        slice_arr = ds.variables['slice'][:]
-    # convert slices to slice objects
-    # TODO: this is a bit slow (several minutes)
-    # fun = lambda x: (slice(x[0], x[1]), slice(x[2], x[3]))
-    # vars['slice'] = list(np.ma.apply_along_axis(
-    #     fun,
-    #     1,
-    #     slice_arr
-    # ))
-    vars['slice_0'] = slice_arr[:, 0]
-    vars['slice_1'] = slice_arr[:, 1]
-    vars['slice_2'] = slice_arr[:, 2]
-    vars['slice_3'] = slice_arr[:, 3]
-    tables = pd.DataFrame(vars, index=index)
+            vars[var] = arr
+    # fast approach, use just numpy array
+    if arrays:
+        tables = vars
+    else:
+        # this is slow for large number of cells
+        for key, arr in vars.items():
+            vars[key] = list(arr)
+        tables = pd.DataFrame(vars, index=index)
     return tables
 
 
