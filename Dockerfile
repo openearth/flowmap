@@ -10,14 +10,14 @@ RUN \
     apt-get install -y ffmpeg wget unzip
 
 # install everything from condaforge
-RUN conda create -y -n py36 python=3.6
-RUN conda install -c conda-forge mayavi libgdal gdal netcdf4 matplotlib scikit-image tqdm cython pillow click pandas
+RUN conda create -y -n py35 python=3.5
+RUN conda install -c conda-forge -n py35 mayavi libgdal gdal netcdf4 matplotlib scikit-image tqdm cython pillow click pandas
 # install flowmap in the new environment
 
 COPY ./ app/
-RUN /opt/conda/envs/py36/bin/pip install app/
+RUN /opt/conda/envs/py35/bin/pip install app/
 
 ENV PATH /opt/conda/bin:$PATH
 # not sure what this is
 ENTRYPOINT [ "/usr/bin/tini", "--" ]
-CMD [ "/opt/conda/envs/py36/bin/matroos_flowmap" ]
+CMD [ "/opt/conda/envs/py35/bin/matroos_flowmap" ]
