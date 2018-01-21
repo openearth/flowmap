@@ -158,13 +158,13 @@ def compute_features(grid, dem, tables, data, method='waterdepth'):
     tables['subgrid_' + method] = results
 
     features = []
+    centers = grid['face_centers']
     for face_id in tqdm.tqdm(face_ids):
         """convert row 2 features"""
-        face = grid['faces'][face_id]
-        coordinates = face.mean(axis=0)
+        center = centers[face_id]
         feature = geojson.Feature(
             geometry=geojson.Point(
-                coordinates=tuple(coordinates)
+                coordinates=tuple(center)
             ),
             id=face_id,
             properties={

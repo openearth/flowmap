@@ -24,7 +24,7 @@ from tvtk.api import tvtk
 import rasterio
 import rasterio.mask
 import rasterio.crs
-import numba
+import shapely.geometry
 
 from .netcdf import NetCDF
 from .. import particles
@@ -34,6 +34,21 @@ from ..dem import read_dem
 
 
 logger = logging.getLogger(__name__)
+
+
+class CustomEncoder(geojson.GeoJSONEncoder):
+    """also convert numpy """
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return super(CustomEncoder, self).default(obj)
+
+
 
 
 class UGrid(NetCDF):
@@ -80,6 +95,45 @@ class UGrid(NetCDF):
             faces=faces,
             points=points
         )
+
+    def to_features(self):
+        """convert grid to geojson features"""
+        ugrid = self.ugrid
+        faces = ugrid['faces']
+
+        crs = geojson.crs.Named(
+            properties={
+                "name": "urn:ogc:def:crs:EPSG::{:d}".format(self.src_epsg)
+            }
+        )
+        counts = (~faces.mask).sum(axis=1)
+        face_coordinates = ugrid['face_coordinates']
+        features= []
+        for i, (face, count) in tqdm.tqdm(enumerate(zip(face_coordinates, counts)), desc='grid->features'):
+            poly = shapely.geometry.Polygon(face[:count].tolist())
+            geometry = poly.__geo_interface__
+            geometry['crs'] = dict(crs)
+            feature = geojson.Feature(id=i, geometry=geometry)
+            features.append(feature)
+        return features
+
+    def to_polys(self):
+        """convert grid to geojson features"""
+        ugrid = self.ugrid
+        faces = ugrid['faces']
+
+        crs = geojson.crs.Named(
+            properties={
+                "name": "urn:ogc:def:crs:EPSG::{:d}".format(self.src_epsg)
+            }
+        )
+        counts = (~faces.mask).sum(axis=1)
+        face_coordinates = ugrid['face_coordinates']
+        polys = []
+        for i, (face, count) in tqdm.tqdm(enumerate(zip(face_coordinates, counts)), desc='grid->polys'):
+            poly = shapely.geometry.Polygon(face[:count].tolist())
+            polys.append(poly)
+        return polys
 
     def to_polydata(self):
         """convert grid to polydata"""
@@ -202,6 +256,8 @@ class UGrid(NetCDF):
                 tables = subgrid.build_tables(grid, dem)
             logger.info('computing subgrid band')
             if format == '.geojson':
+                if method == 'waterdepth':
+                    raise ValueError('waterdepth method only has .tiff format output')
                 feature_collection = subgrid.compute_features(grid, dem, tables, data, method=method)
             elif format == '.tiff':
                 # this is also slow
@@ -237,7 +293,7 @@ class UGrid(NetCDF):
             )
             feature_collection['crs'] = crs
             with open(new_name, 'w') as f:
-                geojson.dump(feature_collection, f)
+                geojson.dump(feature_collection, f, cls=CustomEncoder, allow_nan=False, ignore_nan=True)
         elif format == '.tiff':
             logger.info('writing subgrid band')
             # use extreme value as nodata
@@ -265,15 +321,15 @@ class UGrid(NetCDF):
 
     def export(self, format):
         """export dataset"""
+        crs = geojson.crs.Named(
+            properties={
+                "name": "urn:ogc:def:crs:EPSG::{:d}".format(
+                    self.src_epsg
+                )
+            }
+        )
         if format == 'hull':
             poly = self.to_polydata()
-            crs = geojson.crs.Named(
-                properties={
-                    "name": "urn:ogc:def:crs:EPSG::{:d}".format(
-                        self.src_epsg
-                    )
-                }
-            )
             cells = [
                 list(poly.get_cell(idx).points)
                 for idx
@@ -288,7 +344,7 @@ class UGrid(NetCDF):
             )
 
             with open(new_name, 'w') as f:
-                geojson.dump(feature, f)
+                geojson.dump(feature, f, cls=CustomEncoder, allow_nan=False, ignore_nan=True)
         elif format == 'tables':
             dem = read_dem(self.options['dem'])
             grid = self.ugrid
@@ -300,6 +356,39 @@ class UGrid(NetCDF):
             )
             subgrid.create_export(new_name, n_cells=len(tables), n_bins=20)
             subgrid.export_tables(new_name, tables)
+        elif format == 'id_grid':
+            dem = read_dem(self.options['dem'])
+            polys = self.to_polys()
+            nodata = -999
+            rasterized = rasterio.features.rasterize(
+                ((poly, i) for (i, poly) in enumerate(polys)),
+                out_shape=dem['band'].shape,
+                transform=dem['affine'],
+                fill=nodata
+            )
+            new_name = self.generate_name(
+                self.path,
+                suffix='.tiff',
+                topic=format
+            )
+            options = dict(
+                dtype=str(rasterized.dtype),
+                nodata=nodata,
+                count=1,
+                compress='lzw',
+                tiled=True,
+                blockxsize=256,
+                blockysize=256,
+                driver='GTiff',
+                affine=dem['affine'],
+                width=dem['width'],
+                height=dem['height'],
+                crs=rasterio.crs.CRS({'init': 'epsg:%d' % (self.src_epsg)})
+
+            )
+            with rasterio.open(str(new_name), 'w', **options) as out:
+                out.write(rasterized, indexes=1)
+
         else:
             raise ValueError('unknown format: %s' % (format, ))
 

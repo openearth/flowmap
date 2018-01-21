@@ -237,7 +237,7 @@ def subgrid(dataset, dem, timestep, method, format, **kwargs):
 )
 @click.option(
     "--format",
-    type=click.Choice(['hull', 'tables'])
+    type=click.Choice(['hull', 'tables', 'id_grid'])
 )
 @click.option(
     "--src_epsg",
