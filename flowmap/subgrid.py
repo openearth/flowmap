@@ -100,12 +100,14 @@ def build_tables(grid, dem):
             face_px[:, 0].min():face_px[:, 0].max()
         ]
         dem_i = dem['band'][face_px2slice]
+        # TOOD: als mask using id grid here....
         if dem_i.mask.any():
             n_per_bin, bin_edges = None, None
             volume_table = None
             cum_volume_table = None
         else:
             n_per_bin, bin_edges = np.histogram(dem_i, bins=20)
+            # should this be equal to non masked cells in dem_i?
             n_cum = np.cumsum(n_per_bin)
             volume_table = np.abs(affine.a * affine.e) * n_cum * np.diff(bin_edges)
             cum_volume_table = np.cumsum(volume_table)
