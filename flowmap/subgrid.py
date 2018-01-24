@@ -77,7 +77,7 @@ def build_interpolate(grid, values):
     return L
 
 
-def build_tables(grid, dem):
+def build_tables(grid, dem, id_grid):
     """compute volume tables per cell"""
 
     # compute cache of histograms per cell
@@ -100,13 +100,26 @@ def build_tables(grid, dem):
             face_px[:, 0].min():face_px[:, 0].max()
         ]
         dem_i = dem['band'][face_px2slice]
+        ids_i_mask  = id_grid[face_px2slice] != id_
+        # we have three conditions to exclude a cell
+        masks = [
+            # dem is missing
+            dem_i.mask,
+            # not our cell
+            ids_i_mask,
+        ]
+        # cell not set
+        if ids_i_mask.mask.any():
+            masks.append(ids_i_mask.mask)
+
+        mask = np.logical_or.reduce(masks)
         # TOOD: als mask using id grid here....
         if dem_i.mask.any():
             n_per_bin, bin_edges = None, None
             volume_table = None
             cum_volume_table = None
         else:
-            n_per_bin, bin_edges = np.histogram(dem_i, bins=20)
+            n_per_bin, bin_edges = np.histogram(dem_i[~mask], bins=20)
             # should this be equal to non masked cells in dem_i?
             n_cum = np.cumsum(n_per_bin)
             volume_table = np.abs(affine.a * affine.e) * n_cum * np.diff(bin_edges)

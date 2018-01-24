@@ -234,6 +234,30 @@ class UGrid(NetCDF):
         )
         return is_grid
 
+    def build_id_grid(self, dem):
+        id_grid_name = self.generate_name(
+            self.path,
+            suffix='.tiff',
+            topic='id_grid'
+        )
+        # grid already exists
+        if id_grid_name.exists():
+            logger.info('returning existing id grid {}'.format(id_grid_name))
+            with rasterio.open(str(id_grid_name)) as src:
+                # read band 0 (1-based)
+                band = src.read(1, masked=True)
+                return band
+
+        polys = self.to_polys()
+        nodata = -999
+        rasterized = rasterio.features.rasterize(
+            ((poly, i) for (i, poly) in enumerate(polys)),
+            out_shape=dem['band'].shape,
+            transform=dem['affine'],
+            fill=nodata
+        )
+        return rasterized
+
     def subgrid(self, t, method, format='.geojson'):
         """compute refined waterlevel using detailled dem, using subgrid or interpolate method"""
         dem = read_dem(self.options['dem'])
@@ -347,8 +371,9 @@ class UGrid(NetCDF):
                 geojson.dump(feature, f, cls=CustomEncoder, allow_nan=False, ignore_nan=True)
         elif format == 'tables':
             dem = read_dem(self.options['dem'])
+            id_grid = self.build_id_grid(dem)
             grid = self.ugrid
-            tables = subgrid.build_tables(grid, dem)
+            tables = subgrid.build_tables(grid, dem, id_grid)
             new_name = self.generate_name(
                 self.path,
                 suffix='.nc',
@@ -358,14 +383,7 @@ class UGrid(NetCDF):
             subgrid.export_tables(new_name, tables)
         elif format == 'id_grid':
             dem = read_dem(self.options['dem'])
-            polys = self.to_polys()
-            nodata = -999
-            rasterized = rasterio.features.rasterize(
-                ((poly, i) for (i, poly) in enumerate(polys)),
-                out_shape=dem['band'].shape,
-                transform=dem['affine'],
-                fill=nodata
-            )
+            id_grid = self.build_id_grid(dem)
             new_name = self.generate_name(
                 self.path,
                 suffix='.tiff',
