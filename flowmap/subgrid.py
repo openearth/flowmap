@@ -72,8 +72,8 @@ def subgrid_compute(row, dem, method="waterlevel"):
 def build_interpolate(grid, values):
     """create an interpolation function"""
     # assert a pyugrid
-    face_centers = grid['face_centers']
-    L = scipy.interpolate.LinearNDInterpolator(face_centers, values)
+    face_centroids = grid['face_centroids']
+    L = scipy.interpolate.LinearNDInterpolator(face_centroids, values)
     return L
 
 
@@ -152,7 +152,7 @@ def compute_features(grid, dem, tables, data, method='waterdepth'):
     """compute subgrid waterdepth band"""
 
     # register pandas progress
-    tqdm.tqdm(desc="panda is out for lunch!").pandas()
+    tqdm.tqdm(desc="computing features").pandas()
 
     # list of face indices
     face_ids = np.arange(tables['volume_table'].shape[0])
@@ -163,7 +163,7 @@ def compute_features(grid, dem, tables, data, method='waterdepth'):
 
     results = []
     # fill the in memory band
-    for face_id in tqdm.tqdm(face_ids):
+    for face_id in tqdm.tqdm(face_ids, desc='subgrid compute'):
         row = {}
         for key, var in tables.items():
             row[key] = var[face_id]
@@ -173,13 +173,13 @@ def compute_features(grid, dem, tables, data, method='waterdepth'):
     tables['subgrid_' + method] = results
 
     features = []
-    centers = grid['face_centers']
-    for face_id in tqdm.tqdm(face_ids):
+    centroids = grid['face_centroids']
+    for face_id in tqdm.tqdm(face_ids, desc='exporting features'):
         """convert row 2 features"""
-        center = centers[face_id]
+        centroid = centroids[face_id]
         feature = geojson.Feature(
             geometry=geojson.Point(
-                coordinates=tuple(center)
+                coordinates=tuple(centroid)
             ),
             id=face_id,
             properties={

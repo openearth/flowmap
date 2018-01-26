@@ -79,11 +79,18 @@ class UGrid(NetCDF):
         ugrid = pyugrid.UGrid.from_ncfile(self.path, 'mesh2d')
 
         faces = np.ma.asanyarray(ugrid.faces)
+
+        # TODO: check why we get circumcenters?
+        # Don't use these, these are circumcenters
         face_centers = ugrid.face_coordinates
+
         nodes = ugrid.nodes
         # should be a ragged array
         face_coordinates = np.ma.asanyarray(nodes[faces])
         face_coordinates[faces.mask] = np.ma.masked
+
+        # recompute face centers
+        face_centroids = face_coordinates.mean(axis=1)
 
         x = nodes[:, 0]
         y = nodes[:, 1]
@@ -92,6 +99,7 @@ class UGrid(NetCDF):
         return dict(
             face_coordinates=face_coordinates,
             face_centers=face_centers,
+            face_centroids=face_centroids,
             faces=faces,
             points=points
         )
