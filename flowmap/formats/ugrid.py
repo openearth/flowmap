@@ -285,7 +285,8 @@ class UGrid(NetCDF):
                 tables = subgrid.import_tables(str(table_path))
             else:
                 logger.info('creating subgrid tables')
-                tables = subgrid.build_tables(grid, dem)
+                id_grid = subgrid.build_id_grid(dem)
+                tables = subgrid.build_tables(grid, dem, id_grid)
             logger.info('computing subgrid band')
             if format == '.geojson':
                 if method == 'waterdepth':

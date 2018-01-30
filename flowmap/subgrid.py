@@ -76,7 +76,6 @@ def build_interpolate(grid, values):
     L = scipy.interpolate.LinearNDInterpolator(face_centroids, values)
     return L
 
-
 def build_tables(grid, dem, id_grid):
     """compute volume tables per cell"""
 
