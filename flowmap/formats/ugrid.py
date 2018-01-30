@@ -79,11 +79,18 @@ class UGrid(NetCDF):
         ugrid = pyugrid.UGrid.from_ncfile(self.path, 'mesh2d')
 
         faces = np.ma.asanyarray(ugrid.faces)
+
+        # TODO: check why we get circumcenters?
+        # Don't use these, these are circumcenters
         face_centers = ugrid.face_coordinates
+
         nodes = ugrid.nodes
         # should be a ragged array
         face_coordinates = np.ma.asanyarray(nodes[faces])
         face_coordinates[faces.mask] = np.ma.masked
+
+        # recompute face centers
+        face_centroids = face_coordinates.mean(axis=1)
 
         x = nodes[:, 0]
         y = nodes[:, 1]
@@ -92,6 +99,7 @@ class UGrid(NetCDF):
         return dict(
             face_coordinates=face_coordinates,
             face_centers=face_centers,
+            face_centroids=face_centroids,
             faces=faces,
             points=points
         )
@@ -136,7 +144,7 @@ class UGrid(NetCDF):
         return polys
 
     def to_polydata(self):
-        """convert grid to polydata"""
+        """convert grid to a vtk polydata object"""
         grid = self.ugrid
 
         faces = grid['faces']
@@ -159,6 +167,7 @@ class UGrid(NetCDF):
         return polydata
 
     def update_polydata(self, polydata, t):
+        """set velocities to the polydata"""
         variables = self.velocities(t)
         ucx = variables['ucx']
         ucy = variables['ucy']
@@ -169,6 +178,7 @@ class UGrid(NetCDF):
 
 
     def waterlevel(self, t):
+        """lookup the waterlevel, depth and volume on timestep t"""
         # TODO: inspect mesh variable
         with netCDF4.Dataset(self.path) as ds:
             s1 = ds.variables['mesh2d_s1'][t]
@@ -181,6 +191,7 @@ class UGrid(NetCDF):
         )
 
     def velocities(self, t):
+        """lookup the velocities on the cell centers on timestep t"""
         # TODO: inspect mesh variables
         with netCDF4.Dataset(self.path) as ds:
             # cumulative velocities
@@ -192,6 +203,7 @@ class UGrid(NetCDF):
         )
 
     def streamlines(self, t):
+        """compute streamlines for timestep t"""
         polydata = self.to_polydata()
         self.update_polydata(polydata, t)
         seed = particles.make_particles(polydata, n=self.options.get('n_particles', 1000))
@@ -214,6 +226,7 @@ class UGrid(NetCDF):
         particles.export_lines(lines, str(new_name))
 
     def build_is_grid(self, dem):
+        """create a map in the same shape as dem denoting if a pixel is in or outside the grid"""
         is_grid = np.zeros_like(dem['band'], dtype='bool')
         polydata = self.to_polydata()
         hull = topology.concave_hull(polydata)
@@ -234,6 +247,31 @@ class UGrid(NetCDF):
         )
         return is_grid
 
+    def build_id_grid(self, dem):
+        """create a map in the same shape as dem, with face number for each pixel"""
+        id_grid_name = self.generate_name(
+            self.path,
+            suffix='.tiff',
+            topic='id_grid'
+        )
+        # grid already exists
+        if id_grid_name.exists():
+            logger.info('returning existing id grid {}'.format(id_grid_name))
+            with rasterio.open(str(id_grid_name)) as src:
+                # read band 0 (1-based)
+                band = src.read(1, masked=True)
+                return band
+
+        polys = self.to_polys()
+        nodata = -999
+        rasterized = rasterio.features.rasterize(
+            ((poly, i) for (i, poly) in enumerate(polys)),
+            out_shape=dem['band'].shape,
+            transform=dem['affine'],
+            fill=nodata
+        )
+        return rasterized
+
     def subgrid(self, t, method, format='.geojson'):
         """compute refined waterlevel using detailled dem, using subgrid or interpolate method"""
         dem = read_dem(self.options['dem'])
@@ -253,7 +291,8 @@ class UGrid(NetCDF):
                 tables = subgrid.import_tables(str(table_path))
             else:
                 logger.info('creating subgrid tables')
-                tables = subgrid.build_tables(grid, dem)
+                id_grid = subgrid.build_id_grid(dem)
+                tables = subgrid.build_tables(grid, dem, id_grid)
             logger.info('computing subgrid band')
             if format == '.geojson':
                 if method == 'waterdepth':
@@ -347,8 +386,9 @@ class UGrid(NetCDF):
                 geojson.dump(feature, f, cls=CustomEncoder, allow_nan=False, ignore_nan=True)
         elif format == 'tables':
             dem = read_dem(self.options['dem'])
+            id_grid = self.build_id_grid(dem)
             grid = self.ugrid
-            tables = subgrid.build_tables(grid, dem)
+            tables = subgrid.build_tables(grid, dem, id_grid)
             new_name = self.generate_name(
                 self.path,
                 suffix='.nc',
@@ -358,14 +398,7 @@ class UGrid(NetCDF):
             subgrid.export_tables(new_name, tables)
         elif format == 'id_grid':
             dem = read_dem(self.options['dem'])
-            polys = self.to_polys()
-            nodata = -999
-            rasterized = rasterio.features.rasterize(
-                ((poly, i) for (i, poly) in enumerate(polys)),
-                out_shape=dem['band'].shape,
-                transform=dem['affine'],
-                fill=nodata
-            )
+            id_grid = self.build_id_grid(dem)
             new_name = self.generate_name(
                 self.path,
                 suffix='.tiff',

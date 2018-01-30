@@ -72,12 +72,11 @@ def subgrid_compute(row, dem, method="waterlevel"):
 def build_interpolate(grid, values):
     """create an interpolation function"""
     # assert a pyugrid
-    face_centers = grid['face_centers']
-    L = scipy.interpolate.LinearNDInterpolator(face_centers, values)
+    face_centroids = grid['face_centroids']
+    L = scipy.interpolate.LinearNDInterpolator(face_centroids, values)
     return L
 
-
-def build_tables(grid, dem):
+def build_tables(grid, dem, id_grid):
     """compute volume tables per cell"""
 
     # compute cache of histograms per cell
@@ -100,13 +99,26 @@ def build_tables(grid, dem):
             face_px[:, 0].min():face_px[:, 0].max()
         ]
         dem_i = dem['band'][face_px2slice]
+        ids_i_mask  = id_grid[face_px2slice] != id_
+        # we have three conditions to exclude a cell
+        masks = [
+            # dem is missing
+            dem_i.mask,
+            # not our cell
+            ids_i_mask,
+        ]
+        # cell not set
+        if ids_i_mask.mask.any():
+            masks.append(ids_i_mask.mask)
+
+        mask = np.logical_or.reduce(masks)
         # TOOD: als mask using id grid here....
         if dem_i.mask.any():
             n_per_bin, bin_edges = None, None
             volume_table = None
             cum_volume_table = None
         else:
-            n_per_bin, bin_edges = np.histogram(dem_i, bins=20)
+            n_per_bin, bin_edges = np.histogram(dem_i[~mask], bins=20)
             # should this be equal to non masked cells in dem_i?
             n_cum = np.cumsum(n_per_bin)
             volume_table = np.abs(affine.a * affine.e) * n_cum * np.diff(bin_edges)
@@ -139,7 +151,7 @@ def compute_features(grid, dem, tables, data, method='waterdepth'):
     """compute subgrid waterdepth band"""
 
     # register pandas progress
-    tqdm.tqdm(desc="panda is out for lunch!").pandas()
+    tqdm.tqdm(desc="computing features").pandas()
 
     # list of face indices
     face_ids = np.arange(tables['volume_table'].shape[0])
@@ -150,7 +162,7 @@ def compute_features(grid, dem, tables, data, method='waterdepth'):
 
     results = []
     # fill the in memory band
-    for face_id in tqdm.tqdm(face_ids):
+    for face_id in tqdm.tqdm(face_ids, desc='subgrid compute'):
         row = {}
         for key, var in tables.items():
             row[key] = var[face_id]
@@ -160,13 +172,13 @@ def compute_features(grid, dem, tables, data, method='waterdepth'):
     tables['subgrid_' + method] = results
 
     features = []
-    centers = grid['face_centers']
-    for face_id in tqdm.tqdm(face_ids):
+    centroids = grid['face_centroids']
+    for face_id in tqdm.tqdm(face_ids, desc='exporting features'):
         """convert row 2 features"""
-        center = centers[face_id]
+        centroid = centroids[face_id]
         feature = geojson.Feature(
             geometry=geojson.Point(
-                coordinates=tuple(center)
+                coordinates=tuple(centroid)
             ),
             id=face_id,
             properties={
