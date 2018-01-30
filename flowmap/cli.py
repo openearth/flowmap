@@ -247,7 +247,8 @@ def subgrid(dataset, dem, timestep, method, format, **kwargs):
 @click.option(
     "--valid-range",
     nargs=2,
-    type=click.Tuple([float, float])
+    type=click.Tuple([float, float]),
+    default=(None, None)
 )
 def export(dataset, dem, format, **kwargs):
     """Create a geojson file"""

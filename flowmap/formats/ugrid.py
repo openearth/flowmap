@@ -404,8 +404,9 @@ class UGrid(NetCDF):
                 suffix='.tiff',
                 topic=format
             )
+            nodata = -999
             options = dict(
-                dtype=str(rasterized.dtype),
+                dtype=str(id_grid.dtype),
                 nodata=nodata,
                 count=1,
                 compress='lzw',

@@ -88,7 +88,7 @@ def build_interpolate(grid, values):
 def build_tables(grid, dem, id_grid, valid_range):
     """compute volume tables per cell"""
 
-    if valid_range is not None:
+    if (valid_range is not None) and (None not in valid_range):
         logger.info('filtering by valid-range %s', valid_range)
         invalid_mask = np.logical_or(
             dem['band'] < valid_range[0],
@@ -126,7 +126,7 @@ def build_tables(grid, dem, id_grid, valid_range):
             ids_i_mask,
         ]
         # cell not set
-        if ids_i_mask.mask.any():
+        if hasattr(ids_i_mask, 'mask') and ids_i_mask.mask.any():
             masks.append(ids_i_mask.mask)
         # invalid values
         if valid_range is not None:
@@ -230,7 +230,7 @@ def compute_band(grid, dem, tables, data, method='waterdepth'):
     tables['vol1'] = data['vol1']
 
     # fill the in memory band
-    for face_idx in tqdm.tqdm(faces):
+    for face_idx in tqdm.tqdm(faces, desc='computing band'):
         row = tables.loc[face_idx]
         result = subgrid_compute(row, dem=dem, method=method)
         if result is None:
@@ -270,6 +270,12 @@ def create_export(filename, n_cells, n_bins):
             "type": "double"
         },
         {
+            "name": "face_area",
+            "dimensions": ("cells", ),
+            "long_name": "face area",
+            "type": "double"
+        },
+        {
             "name": "extent",
             "dimensions": ("cells", "two_times_two"),
             "long_name": "extent (left, right, lower, upper)",
@@ -304,7 +310,11 @@ def create_export(filename, n_cells, n_bins):
 def export_tables(filename, tables):
     """store tables in netcdf file, create file with create_export"""
     with netCDF4.Dataset(filename, 'r+') as ds:
-        for i, row in tqdm.tqdm(tables.reset_index().iterrows(), total=len(tables)):
+        for i, row in tqdm.tqdm(
+                tables.reset_index().iterrows(),
+                total=len(tables),
+                desc='exporting'
+        ):
             for var in [
                 'bin_edges', 'cum_volume_table', 'volume_table',
                 'extent', 'n_per_bin', 'face_area'
