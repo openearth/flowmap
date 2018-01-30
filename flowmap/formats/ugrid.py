@@ -144,7 +144,7 @@ class UGrid(NetCDF):
         return polys
 
     def to_polydata(self):
-        """convert grid to polydata"""
+        """convert grid to a vtk polydata object"""
         grid = self.ugrid
 
         faces = grid['faces']
@@ -167,6 +167,7 @@ class UGrid(NetCDF):
         return polydata
 
     def update_polydata(self, polydata, t):
+        """set velocities to the polydata"""
         variables = self.velocities(t)
         ucx = variables['ucx']
         ucy = variables['ucy']
@@ -177,6 +178,7 @@ class UGrid(NetCDF):
 
 
     def waterlevel(self, t):
+        """lookup the waterlevel, depth and volume on timestep t"""
         # TODO: inspect mesh variable
         with netCDF4.Dataset(self.path) as ds:
             s1 = ds.variables['mesh2d_s1'][t]
@@ -189,6 +191,7 @@ class UGrid(NetCDF):
         )
 
     def velocities(self, t):
+        """lookup the velocities on the cell centers on timestep t"""
         # TODO: inspect mesh variables
         with netCDF4.Dataset(self.path) as ds:
             # cumulative velocities
@@ -200,6 +203,7 @@ class UGrid(NetCDF):
         )
 
     def streamlines(self, t):
+        """compute streamlines for timestep t"""
         polydata = self.to_polydata()
         self.update_polydata(polydata, t)
         seed = particles.make_particles(polydata, n=self.options.get('n_particles', 1000))
@@ -222,6 +226,7 @@ class UGrid(NetCDF):
         particles.export_lines(lines, str(new_name))
 
     def build_is_grid(self, dem):
+        """create a map in the same shape as dem denoting if a pixel is in or outside the grid"""
         is_grid = np.zeros_like(dem['band'], dtype='bool')
         polydata = self.to_polydata()
         hull = topology.concave_hull(polydata)
@@ -243,6 +248,7 @@ class UGrid(NetCDF):
         return is_grid
 
     def build_id_grid(self, dem):
+        """create a map in the same shape as dem, with face number for each pixel"""
         id_grid_name = self.generate_name(
             self.path,
             suffix='.tiff',
