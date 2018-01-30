@@ -358,7 +358,7 @@ class UGrid(NetCDF):
             with rasterio.open(str(new_name), 'w', **options) as dst:
                 dst.write(band.filled(nodata), 1)
 
-    def export(self, format):
+    def export(self, format, **kwargs):
         """export dataset"""
         crs = geojson.crs.Named(
             properties={
@@ -388,7 +388,7 @@ class UGrid(NetCDF):
             dem = read_dem(self.options['dem'])
             id_grid = self.build_id_grid(dem)
             grid = self.ugrid
-            tables = subgrid.build_tables(grid, dem, id_grid)
+            tables = subgrid.build_tables(grid, dem, id_grid, kwargs.get('valid_range'))
             new_name = self.generate_name(
                 self.path,
                 suffix='.nc',

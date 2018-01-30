@@ -48,14 +48,22 @@ def subgrid_compute(row, dem, method="waterlevel"):
     vol_i = row['vol1']
 
     fill_idx = bisect.bisect(cum_volume_table, vol_i)
-    remaining_volume = vol_i - cum_volume_table[fill_idx - 1]
+    if fill_idx > 0:
+        remaining_volume = vol_i - cum_volume_table[fill_idx - 1]
+    else:
+        remaining_volume = vol_i - cum_volume_table[0]
     pixel_area = dem['dxp'] * dem['dyp']
-    face_area = np.prod(dem_i.shape) * pixel_area
 
+    # face_area = np.prod(dem_i.shape) * pixel_area
+    # TODO: check if this works
+    face_area = row['face_area']
+
+    # are we outside the volume table
     if fill_idx >= len(cum_volume_table) - 1:
         remaining = (vol_i - cum_volume_table[-1]) / face_area
         target_level = bin_edges[-1] + remaining
     else:
+        # we're in the volume table
         remaining_volume_fraction = remaining_volume / volume_table[fill_idx]
         target_level = bin_edges[fill_idx] + remaining_volume_fraction * (bin_edges[fill_idx + 1] - bin_edges[fill_idx])
     if method == 'waterlevel':
@@ -76,8 +84,18 @@ def build_interpolate(grid, values):
     L = scipy.interpolate.LinearNDInterpolator(face_centroids, values)
     return L
 
-def build_tables(grid, dem, id_grid):
+
+def build_tables(grid, dem, id_grid, valid_range):
     """compute volume tables per cell"""
+
+    if valid_range is not None:
+        logger.info('filtering by valid-range %s', valid_range)
+        invalid_mask = np.logical_or(
+            dem['band'] < valid_range[0],
+            dem['band'] > valid_range[1]
+        )
+    else:
+        invalid_mask = np.zeros_like(dem['band'], dtype=bool)
 
     # compute cache of histograms per cell
     faces = grid['face_coordinates']
@@ -110,6 +128,11 @@ def build_tables(grid, dem, id_grid):
         # cell not set
         if ids_i_mask.mask.any():
             masks.append(ids_i_mask.mask)
+        # invalid values
+        if valid_range is not None:
+            masks.append(
+                invalid_mask[face_px2slice]
+            )
 
         mask = np.logical_or.reduce(masks)
         # TOOD: als mask using id grid here....
@@ -117,11 +140,13 @@ def build_tables(grid, dem, id_grid):
             n_per_bin, bin_edges = None, None
             volume_table = None
             cum_volume_table = None
+            face_area = None
         else:
             n_per_bin, bin_edges = np.histogram(dem_i[~mask], bins=20)
             # should this be equal to non masked cells in dem_i?
             n_cum = np.cumsum(n_per_bin)
             volume_table = np.abs(affine.a * affine.e) * n_cum * np.diff(bin_edges)
+            face_area = np.abs(affine.a * affine.e) * n_cum
             cum_volume_table = np.cumsum(volume_table)
         extent = [
             face[:, 0].min(),
@@ -133,6 +158,7 @@ def build_tables(grid, dem, id_grid):
             id=id_,
             slice=face_px2slice,
             face=face,
+            face_area=face_area,
             volume_table=volume_table,
             cum_volume_table=cum_volume_table,
             n_per_bin=n_per_bin,
@@ -280,8 +306,8 @@ def export_tables(filename, tables):
     with netCDF4.Dataset(filename, 'r+') as ds:
         for i, row in tqdm.tqdm(tables.reset_index().iterrows(), total=len(tables)):
             for var in [
-                    'bin_edges', 'cum_volume_table', 'volume_table',
-                    'extent', 'n_per_bin'
+                'bin_edges', 'cum_volume_table', 'volume_table',
+                'extent', 'n_per_bin', 'face_area'
             ]:
                 val = row[var]
                 # skip none
@@ -305,7 +331,7 @@ def import_tables(filename, arrays=True):
         for var in [
                 'bin_edges', 'cum_volume_table',
                 'volume_table', 'extent', 'n_per_bin',
-                'slice'
+                'slice', 'face_area'
         ]:
             arr = ds.variables[var][:]
             vars[var] = arr
