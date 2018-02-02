@@ -244,13 +244,19 @@ def subgrid(dataset, dem, timestep, method, format, **kwargs):
     type=int,
     required=True
 )
+@click.option(
+    "--valid-range",
+    nargs=2,
+    type=click.Tuple([float, float]),
+    default=(None, None)
+)
 def export(dataset, dem, format, **kwargs):
     """Create a geojson file"""
     klass = flowmap.formats.get_format(dataset, **kwargs)
     ds = klass(dataset, dem=dem, **kwargs)
     logger.info("exporting grid")
     if hasattr(ds, 'export'):
-        ds.export(format=format)
+        ds.export(format=format, **kwargs)
     else:
         raise ValueError('exporting not yet supported for format', klass)
 

@@ -358,7 +358,7 @@ class UGrid(NetCDF):
             with rasterio.open(str(new_name), 'w', **options) as dst:
                 dst.write(band.filled(nodata), 1)
 
-    def export(self, format):
+    def export(self, format, **kwargs):
         """export dataset"""
         crs = geojson.crs.Named(
             properties={
@@ -388,7 +388,7 @@ class UGrid(NetCDF):
             dem = read_dem(self.options['dem'])
             id_grid = self.build_id_grid(dem)
             grid = self.ugrid
-            tables = subgrid.build_tables(grid, dem, id_grid)
+            tables = subgrid.build_tables(grid, dem, id_grid, kwargs.get('valid_range'))
             new_name = self.generate_name(
                 self.path,
                 suffix='.nc',
@@ -404,8 +404,9 @@ class UGrid(NetCDF):
                 suffix='.tiff',
                 topic=format
             )
+            nodata = -999
             options = dict(
-                dtype=str(rasterized.dtype),
+                dtype=str(id_grid.dtype),
                 nodata=nodata,
                 count=1,
                 compress='lzw',
@@ -420,7 +421,7 @@ class UGrid(NetCDF):
 
             )
             with rasterio.open(str(new_name), 'w', **options) as out:
-                out.write(rasterized, indexes=1)
+                out.write(id_grid, indexes=1)
 
         else:
             raise ValueError('unknown format: %s' % (format, ))
