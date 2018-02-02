@@ -421,7 +421,7 @@ class UGrid(NetCDF):
 
             )
             with rasterio.open(str(new_name), 'w', **options) as out:
-                out.write(rasterized, indexes=1)
+                out.write(id_grid, indexes=1)
 
         else:
             raise ValueError('unknown format: %s' % (format, ))
