@@ -85,7 +85,7 @@ def build_interpolate(grid, values):
     return L
 
 
-def build_tables(grid, dem, id_grid, valid_range):
+def build_tables(grid, dem, id_grid, valid_range=None):
     """compute volume tables per cell"""
 
     if (valid_range is not None) and (None not in valid_range):
@@ -156,6 +156,7 @@ def build_tables(grid, dem, id_grid, valid_range):
         ]
         record = dict(
             id=id_,
+            # TODO: convert to 4 numbers
             slice=face_px2slice,
             face=face,
             face_area=face_area,
@@ -325,6 +326,7 @@ def export_tables(filename, tables):
                     continue
 
                 ds.variables[var][i] = val
+            # TODO: move this to build_tables
             ds.variables['slice'][i] = [
                 row.slice[0].start,
                 row.slice[0].stop,
