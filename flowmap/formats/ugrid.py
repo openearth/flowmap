@@ -10,7 +10,6 @@ import logging
 import pickle
 import pathlib
 
-# TODO, switch to pyugrid after next release
 import netCDF4
 import numpy as np
 import pyugrid
@@ -80,7 +79,6 @@ class UGrid(NetCDF):
 
         faces = np.ma.asanyarray(ugrid.faces)
 
-        # TODO: check why we get circumcenters?
         # Don't use these, these are circumcenters
         face_centers = ugrid.face_coordinates
 
@@ -372,6 +370,7 @@ class UGrid(NetCDF):
                 )
             }
         )
+        # TODO: export vector plot data
         if format == 'hull':
             poly = self.to_polydata()
             cells = [
