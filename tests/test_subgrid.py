@@ -73,6 +73,11 @@ class TestSubgrid(unittest.TestCase):
         tables = subgrid.build_tables(self.grid.ugrid, self.dem, id_grid)
         assert len(tables) > 0
 
+    def test_subgrid(self):
+        id_grid = subgrid.build_id_grid(self.grid, self.dem)
+        tables = subgrid.build_tables(self.grid.ugrid, self.dem, id_grid)
+        assert len(tables) > 0
+
 
 if __name__ == '__main__':
     sys.exit(unittest.main())

@@ -143,10 +143,10 @@ class UGrid(NetCDF):
 
     def to_polydata(self):
         """convert grid to a vtk polydata object"""
-        grid = self.ugrid
+        ugrid = self.ugrid
 
-        faces = grid['faces']
-        points = grid['points']
+        faces = ugrid['faces']
+        points = ugrid['points']
 
         n_cells = faces.shape[0]
 
@@ -248,7 +248,7 @@ class UGrid(NetCDF):
     def subgrid(self, t, method):
         """compute refined waterlevel using detailled dem, using subgrid or interpolate method"""
         dem = read_dem(self.options['dem'])
-        grid = self.ugrid
+        ugrid = self.ugrid
         data = self.waterlevel(t)
         if method not in ('waterdepth', 'waterlevel'):
             raise ValueError('unknown method')
@@ -279,13 +279,13 @@ class UGrid(NetCDF):
 
         logger.info('computing subgrid features')
         feature_collection = subgrid.compute_features(
-            grid,
+            ugrid,
             dem,
             tables,
             data,
             method=method
         )
-        new_name = self.generate_ndame(
+        new_name = self.generate_name(
             self.path,
             suffix='.geojson',
             topic=method,
@@ -380,8 +380,8 @@ class UGrid(NetCDF):
                 logger.warn(msg)
                 raise IOError('Id Grid not found')
             id_grid = subgrid.import_id_grid(id_grid_path)
-            grid = self.ugrid
-            tables = subgrid.build_tables(grid, dem, id_grid, kwargs.get('valid_range'))
+            ugrid = self.ugrid
+            tables = subgrid.build_tables(ugrid, dem, id_grid, kwargs.get('valid_range'))
             new_name = self.generate_name(
                 self.path,
                 suffix='.nc',
