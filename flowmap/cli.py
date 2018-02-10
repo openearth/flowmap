@@ -228,7 +228,8 @@ def subgrid(dataset, dem, timestep, method, **kwargs):
     type=click.Path(
         exists=True,
         resolve_path=True
-    )
+    ),
+    required=False
 )
 @click.option(
     "--format",
@@ -252,6 +253,13 @@ def export(dataset, dem, format, **kwargs):
     File names are generated based on the grid name in the format:
     [grid_name]_[export_name].[suffix]
     """
+    if format not in ['hull'] and not dem:
+        raise click.UsageError(
+            'format {} requires dem, got {}'.format(format, dem)
+        )
+
+
+
     klass = flowmap.formats.get_format(dataset, **kwargs)
     ds = klass(dataset, dem=dem, **kwargs)
     logger.info("exporting grid")

@@ -218,7 +218,7 @@ class UGrid(NetCDF):
         )
         # create a new name
         path = pathlib.Path(self.path)
-        new_name = path.with_name(path.stem + '_streamlines').with_suffix('.geojson')
+        new_name = path.with_name(path.stem + '_streamlines').with_suffix('.json')
         # save the particles
         particles.export_lines(lines, str(new_name))
 
@@ -286,7 +286,7 @@ class UGrid(NetCDF):
         )
         new_name = self.generate_name(
             self.path,
-            suffix='.geojson',
+            suffix='.json',
             topic=method,
             counter=t
         )
