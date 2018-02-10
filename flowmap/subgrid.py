@@ -374,6 +374,12 @@ def export_grid(filename, grid, affine, width, height, epsg):
         height=height,
         crs=rasterio.crs.CRS({'init': 'epsg:%d' % (epsg, )})
     )
+
+    # fill missings if used (not quite sure if needed)
+    # TODO: check if we can remove this.
+    if hasattr(grid, 'filled'):
+        grid = grid.filled(NODATA)
+
     with rasterio.open(str(filename), 'w', **options) as out:
         out.write(grid, indexes=1)
 
