@@ -5,10 +5,10 @@ import unittest
 import logging
 
 import numpy as np
-import scipy.interpolate
 import rasterio.transform
 
 from flowmap import subgrid
+import flowmap.formats.ugrid
 
 logger = logging.getLogger(__name__)
 
@@ -33,14 +33,24 @@ class TestSubgrid(unittest.TestCase):
         mask = np.repeat(faces.mask[:, :, np.newaxis], repeats=2, axis=2)
         face_coordinates = node_coordinates[faces.filled(0)]
         face_coordinates = np.ma.masked_array(face_coordinates, mask)
-        face_centers = np.ma.mean(face_coordinates, axis=1)
+        face_centroids = np.ma.mean(face_coordinates, axis=1)
 
-        self.grid = dict(
+        ugrid = dict(
             node_coordinates=node_coordinates,
             faces=faces,
             face_coordinates=face_coordinates,
-            face_centers=face_centers
+            face_centroids=face_centroids
         )
+
+        # Mock grid
+        class Grid():
+            # some shared functions
+            src_epsg = 28992
+            to_polys = flowmap.formats.ugrid.UGrid.to_polys
+        grid = Grid()
+        grid.ugrid = ugrid
+        self.grid = grid
+
         self.dem = dict(
             band=np.ma.ones((5, 5), dtype='float32'),
             affine=rasterio.transform.Affine(
@@ -54,13 +64,13 @@ class TestSubgrid(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_interpolate(self):
-        values = np.zeros((self.grid['faces'].shape[0], 3), dtype='double')
-        L = subgrid.build_interpolate(self.grid, values)
-        assert isinstance(L, scipy.interpolate.LinearNDInterpolator)
+    def test_build_id_grid(self):
+        id_grid = subgrid.build_id_grid(self.grid, self.dem)
+        assert len(id_grid) > 0
 
     def test_build_tables(self):
-        tables = subgrid.build_tables(self.grid, self.dem)
+        id_grid = subgrid.build_id_grid(self.grid, self.dem)
+        tables = subgrid.build_tables(self.grid.ugrid, self.dem, id_grid)
         assert len(tables) > 0
 
 

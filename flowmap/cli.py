@@ -197,26 +197,21 @@ def streamlines(dataset, timestep, **kwargs):
 )
 @click.option(
     "--method",
-    type=click.Choice(['waterdepth', 'waterlevel', 'interpolate']),
+    type=click.Choice(['waterdepth', 'waterlevel']),
     default="waterlevel"
-)
-@click.option(
-    "--format",
-    type=click.Choice(['.geojson', '.tiff']),
-    default=".geojson"
 )
 @click.option(
     "--src_epsg",
     type=int,
     required=True
 )
-def subgrid(dataset, dem, timestep, method, format, **kwargs):
-    """Create a-posteriori subgrid map for the dataset. By default based on the last timestep"""
+def subgrid(dataset, dem, timestep, method, **kwargs):
+    """Create a-posteriori subgrid map for the dataset. By default based on the last timestep. If method `waterdepth` is used it generates a geojson file with subgrid waterdepth per cell. If method `waterlevel` is used it also generates a tiff file with subgrid waterlevels (interpolated waterdepth - dem) per pixel."""
     klass = flowmap.formats.get_format(dataset, **kwargs)
     ds = klass(dataset, dem=dem, **kwargs)
     logger.info("extracting subgrid")
     if hasattr(ds, 'subgrid'):
-        ds.subgrid(timestep, method=method, format=format)
+        ds.subgrid(timestep, method=method)
     else:
         raise ValueError('subgrid not yet supported for format', klass)
 
