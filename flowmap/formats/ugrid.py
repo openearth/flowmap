@@ -244,13 +244,11 @@ class UGrid(NetCDF):
         )
         return is_grid
 
-    def subgrid(self, t, method):
+    def subgrid(self, t):
         """compute refined waterlevel using detailled dem, using subgrid or interpolate method"""
         dem = read_dem(self.options['dem'])
         ugrid = self.ugrid
         data = self.waterlevel(t)
-        if method not in ('waterdepth', 'waterlevel'):
-            raise ValueError('unknown method')
 
         # this is slow
         table_name = self.generate_name(
@@ -277,20 +275,19 @@ class UGrid(NetCDF):
             raise IOError('Subgrid tables not found')
 
         logger.info('computing subgrid features')
-        feature_collection = subgrid.compute_features(
+        feature_collection = subgrid.compute_waterlevels(
             ugrid,
             dem,
             tables,
-            data,
-            method=method
+            data
         )
-        new_name = self.generate_name(
+        waterlevel_name = self.generate_name(
             self.path,
             suffix='.json',
-            topic=method,
+            topic='waterlevel',
             counter=t
         )
-        logger.info('writing subgrid features')
+        logger.info('writing waterlevels features to {}'.format(waterlevel_name))
         # save featuress
         crs = geojson.crs.Named(
             properties={
@@ -298,34 +295,54 @@ class UGrid(NetCDF):
             }
         )
         feature_collection['crs'] = crs
-        with open(new_name, 'w') as f:
+        with open(waterlevel_name, 'w') as f:
             geojson.dump(feature_collection, f, cls=CustomEncoder, allow_nan=False, ignore_nan=True)
 
-        if method == 'waterlevel':
-            logger.warn('interpolation not yet implemente')
-        #     logger.info('writing subgrid band')
-        #     # use extreme value as nodata
-        #     try:
-        #         nodata = np.finfo(band.dtype).min
-        #     except ValueError:
-        #         # for ints use a negative value
-        #         nodata = -99999
-        #     options = dict(
-        #         dtype=str(band.dtype),
-        #         nodata=nodata,
-        #         count=1,
-        #         compress='lzw',
-        #         tiled=True,
-        #         blockxsize=256,
-        #         blockysize=256,
-        #         driver='GTiff',
-        #         affine=dem['affine'],
-        #         width=dem['width'],
-        #         height=dem['height'],
-        #         crs=rasterio.crs.CRS({'init': 'epsg:%d' % (self.src_epsg)})
-        #     )
-        #     with rasterio.open(str(new_name), 'w', **options) as dst:
-        #         dst.write(band.filled(nodata), 1)
+        # interpolate waterlevels to grid (this is file based)
+        interpolated_waterlevel_name = self.generate_name(
+            self.path,
+            suffix='.tiff',
+            topic='waterlevel_idw',
+            counter=t
+        )
+        logger.info(
+            'writing interpolated waterlevels to {}'.format(
+                interpolated_waterlevel_name
+            )
+        )
+        subgrid.interpolate_waterlevels(
+            waterlevel_name,
+            interpolated_waterlevel_name,
+            dem,
+            epsg=self.src_epsg
+        )
+        # interpolated_waterlevel_name is now created
+        with rasterio.open(str(interpolated_waterlevel_name)) as ds:
+            interpolated_waterlevel = ds.read(1, masked=True)
+
+        waterdepth_name = self.generate_name(
+            self.path,
+            suffix='.tiff',
+            topic='waterdepth',
+            counter=t
+        )
+        logger.info(
+            'writing waterdepth to {}'.format(
+                waterdepth_name
+            )
+        )
+        # now for the final computation
+        waterdepth = interpolated_waterlevel - dem['band']
+        # save results
+        subgrid.export_grid(
+            waterdepth_name,
+            waterdepth,
+            affine=dem['affine'],
+            width=dem['width'],
+            height=dem['height'],
+            epsg=self.src_epsg
+        )
+
 
     def export(self, format, **kwargs):
         """export dataset"""
@@ -399,7 +416,7 @@ class UGrid(NetCDF):
                 suffix='.tiff',
                 topic=format
             )
-            subgrid.export_id_grid(
+            subgrid.export_grid(
                 new_name,
                 id_grid,
                 affine=dem['affine'],

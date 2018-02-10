@@ -7,8 +7,13 @@ import tqdm
 import geojson
 import netCDF4
 import rasterio
+import osgeo.osr
+import osgeo.gdal
 
 logger = logging.getLogger(__name__)
+
+# use the same nodata everywhere
+NODATA = -9999
 
 
 def data_for_idx(face_idx, dem, grid, data):
@@ -28,7 +33,7 @@ def data_for_idx(face_idx, dem, grid, data):
     return data
 
 
-def subgrid_compute(row, dem, method="waterlevel"):
+def compute_waterlevel_per_cell(row, dem):
     """get the subgrid waterdepth image"""
     # tables is a dataframe
     bin_edges = row["bin_edges"]
@@ -38,11 +43,6 @@ def subgrid_compute(row, dem, method="waterlevel"):
         return None
     volume_table = row["volume_table"]
     cum_volume_table = row["cum_volume_table"]
-    # imported data (creating slice objects is a bit slow)
-    dem_i = dem['band'][
-        row['slice'][0]:row['slice'][1],
-        row['slice'][2]:row['slice'][3]
-    ]
 
     # this part is once volume is known
     vol_i = row['vol1']
@@ -62,14 +62,7 @@ def subgrid_compute(row, dem, method="waterlevel"):
         # we're in the volume table
         remaining_volume_fraction = remaining_volume / volume_table[fill_idx]
         target_level = bin_edges[fill_idx] + remaining_volume_fraction * (bin_edges[fill_idx + 1] - bin_edges[fill_idx])
-    if method == 'waterlevel':
-        result = float(target_level)
-    elif method == 'waterdepth':
-        # first cell that is not completely filled
-        waterdepth_i = np.zeros_like(dem_i)
-        idx = dem_i < target_level
-        waterdepth_i[idx] = (target_level - dem_i[idx])
-        result = waterdepth_i
+    result = float(target_level)
     return result
 
 
@@ -166,7 +159,7 @@ def build_tables(ugrid, dem, id_grid, valid_range=None):
     return tables
 
 
-def compute_features(grid, dem, tables, data, method='waterdepth'):
+def compute_waterlevels(grid, dem, tables, data):
     """compute subgrid waterdepth band"""
 
     # register pandas progress
@@ -186,9 +179,9 @@ def compute_features(grid, dem, tables, data, method='waterdepth'):
         for key, var in tables.items():
             row[key] = var[face_id]
 
-        result = subgrid_compute(row, dem=dem, method=method)
+        result = compute_waterlevel_per_cell(row, dem=dem)
         results.append(result)
-    tables['subgrid_' + method] = results
+    tables['subgrid_waterlevel'] = results
 
     features = []
     centroids = grid['face_centroids']
@@ -202,7 +195,7 @@ def compute_features(grid, dem, tables, data, method='waterdepth'):
             id=face_id,
             properties={
                 "s1": data['s1'][face_id],
-                "subgrid_" + method: tables['subgrid_' + method][face_id],
+                "subgrid_waterlevel": tables['subgrid_waterlevel'][face_id],
                 "vol1": tables['vol1'][face_id],
                 "waterdepth": tables['waterdepth'][face_id]
             }
@@ -212,26 +205,36 @@ def compute_features(grid, dem, tables, data, method='waterdepth'):
     return collection
 
 
-def compute_band(grid, dem, tables, data, method='waterdepth'):
-    """compute subgrid waterdepth band"""
-    excluded = []
-    faces = list(tables.index)
+def interpolate_waterlevels(waterlevel_file, interpolated_waterlevel_file, dem, epsg):
+    """Compute the interpolated waterlevels in the same format as dem. Reults are stored in interpolated_waterlevel_file."""
+    # compute bounds from dem
+    ulx, xres, xskew, uly, yskew, yres = dem['transform']
+    lrx = ulx + (dem['width'] * xres)
+    lry = uly + (dem['height'] * yres)
+    # define CRS
+    srs = osgeo.osr.SpatialReference()
+    srs.ImportFromEPSG(epsg)
+    # create options object
+    options = osgeo.gdal.GridOptions(
+        zfield='subgrid_waterlevel',
+        outputSRS=srs,
+        outputType=osgeo.gdal.GDT_Float32,
+        noData=NODATA,
+        width=dem['width'],
+        height=dem['height'],
+        outputBounds=(ulx, uly, lrx, lry),
+        algorithm='invdistnn:power=3.0:max_points=4:radius=8:nodata={}'.format(NODATA)
+    )
 
-    # create a masked array, always return floats (band is sometimes int)
-    band = np.ma.masked_all(dem['band'].shape, dtype='float')
-
-    tables['vol1'] = data['vol1']
-
-    # fill the in memory band
-    for face_idx in tqdm.tqdm(faces, desc='computing band'):
-        row = tables.loc[face_idx]
-        result = subgrid_compute(row, dem=dem, method=method)
-        if result is None:
-            excluded.append(face_idx)
-            continue
-        band[row['slice']] = result
-    logger.info("skipped %s cells (%s)", len(excluded), excluded)
-    return band
+    logger.info('interpolating')
+    # note dst, src order
+    result = osgeo.gdal.Grid(
+        str(interpolated_waterlevel_file),
+        str(waterlevel_file),
+        options=options
+    )
+    result.FlushCache()
+    return
 
 
 def create_export(filename, n_cells, n_bins):
@@ -345,23 +348,21 @@ def import_tables(filename, arrays=True):
 def build_id_grid(polys, dem):
     """create a map in the same shape as dem, with face number for each pixel"""
     # generate geojson polygons
-    nodata = -999
     # convert to raster with id as property
     rasterized = rasterio.features.rasterize(
         ((poly, i) for (i, poly) in enumerate(polys)),
         out_shape=dem['band'].shape,
         transform=dem['affine'],
-        fill=nodata
+        fill=NODATA
     )
     return rasterized
 
 
-def export_id_grid(filename, id_grid, affine, width, height, epsg):
+def export_grid(filename, grid, affine, width, height, epsg):
     """export the id grid to filename"""
-    nodata = -999
     options = dict(
-        dtype=str(id_grid.dtype),
-        nodata=nodata,
+        dtype=str(grid.dtype),
+        nodata=NODATA,
         count=1,
         compress='lzw',
         tiled=True,
@@ -374,7 +375,7 @@ def export_id_grid(filename, id_grid, affine, width, height, epsg):
         crs=rasterio.crs.CRS({'init': 'epsg:%d' % (epsg, )})
     )
     with rasterio.open(str(filename), 'w', **options) as out:
-        out.write(id_grid, indexes=1)
+        out.write(grid, indexes=1)
 
 
 def import_id_grid(id_grid_name):
