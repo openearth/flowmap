@@ -18,7 +18,6 @@ import pandas as pd
 
 # used for transforming into a vtk grid and for particles
 import tqdm
-import skimage.draw
 from tvtk.api import tvtk
 import rasterio
 import rasterio.mask
