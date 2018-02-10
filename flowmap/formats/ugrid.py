@@ -245,30 +245,6 @@ class UGrid(NetCDF):
         )
         return is_grid
 
-    def build_id_grid(self, dem):
-        """create a map in the same shape as dem, with face number for each pixel"""
-        id_grid_name = self.generate_name(
-            self.path,
-            suffix='.tiff',
-            topic='id_grid'
-        )
-        # grid already exists
-        if id_grid_name.exists():
-            logger.info('returning existing id grid {}'.format(id_grid_name))
-            with rasterio.open(str(id_grid_name)) as src:
-                # read band 0 (1-based)
-                band = src.read(1, masked=True)
-                return band
-
-        polys = self.to_polys()
-        nodata = -999
-        rasterized = rasterio.features.rasterize(
-            ((poly, i) for (i, poly) in enumerate(polys)),
-            out_shape=dem['band'].shape,
-            transform=dem['affine'],
-            fill=nodata
-        )
-        return rasterized
 
     def subgrid(self, t, method, format='.geojson'):
         """compute refined waterlevel using detailled dem, using subgrid or interpolate method"""
@@ -276,25 +252,29 @@ class UGrid(NetCDF):
         grid = self.ugrid
         data = self.waterlevel(t)
         if method in ('waterdepth', 'waterlevel'):
-
             # this is slow
             table_name = self.generate_name(
                 self.path,
                 suffix='.nc',
                 topic='tables'
             )
+            # We need these two tables to do our computations
             table_path = pathlib.Path(table_name)
+
+            # check if they exist
             if table_path.exists():
                 logger.info('reading subgrid tables from %s', table_path)
                 tables = subgrid.import_tables(str(table_path))
             else:
-                logger.info('creating subgrid tables')
-                # TODO: give warning / error if tables or id_grid have not been created
-                id_grid = self.build_id_grid(dem)
-                # no default valid range
-                tables = subgrid.build_tables(grid, dem, id_grid, valid_range=None)
-                # TODO: after creating and build id grid,
-                # save them.
+                command = 'flowmap export --format tables {} {}'.format(
+                    self.path,
+                    self.options['dem']
+                )
+                msg = 'Create subgrid tables using the command: \n{}'.format(
+                    command
+                )
+                logger.warn(msg)
+                raise IOError('Subgrid tables not found')
 
             logger.info('computing subgrid band')
             if format == '.geojson':
@@ -308,7 +288,7 @@ class UGrid(NetCDF):
             format = '.tiff'
             values = np.c_[data['s1'], data['vol1'], data['waterdepth']]
             # create a grid mask for the dem
-            is_grid = self.build_is_grid(dem)
+            is_grid = subgrid.build_is_grid(dem)
             logger.info('building interpolation')
             L = subgrid.build_interpolate(grid, values)
             logger.info('computing interpolation for current timestep')
@@ -390,7 +370,29 @@ class UGrid(NetCDF):
                 geojson.dump(feature, f, cls=CustomEncoder, allow_nan=False, ignore_nan=True)
         elif format == 'tables':
             dem = read_dem(self.options['dem'])
-            id_grid = self.build_id_grid(dem)
+
+            # lookup id grid and give instructions how
+            # to create it if it doesn't exist
+            id_grid_name = self.generate_name(
+                self.path,
+                suffix='.tiff',
+                topic='id_grid'
+            )
+            id_grid_path = pathlib.Path(id_grid_name)
+            if id_grid_path.exists():
+                id_grid = subgrid.import_id_grid(dem)
+            else:
+                # warning message with suggestion for import command
+                command = 'flowmap export --format id_grid {} {}'.format(
+                    self.path,
+                    self.options['dem']
+                )
+                msg = 'Create id_grid using the command: \n{}'.format(
+                    command
+                )
+                logger.warn(msg)
+                raise IOError('Id Grid not found')
+            id_grid = subgrid.import_id_grid(id_grid_path)
             grid = self.ugrid
             tables = subgrid.build_tables(grid, dem, id_grid, kwargs.get('valid_range'))
             new_name = self.generate_name(
@@ -408,25 +410,14 @@ class UGrid(NetCDF):
                 suffix='.tiff',
                 topic=format
             )
-            nodata = -999
-            options = dict(
-                dtype=str(id_grid.dtype),
-                nodata=nodata,
-                count=1,
-                compress='lzw',
-                tiled=True,
-                blockxsize=256,
-                blockysize=256,
-                driver='GTiff',
+            subgrid.export_id_grid(
+                new_name,
+                id_grid,
                 affine=dem['affine'],
                 width=dem['width'],
                 height=dem['height'],
-                crs=rasterio.crs.CRS({'init': 'epsg:%d' % (self.src_epsg)})
-
+                epsg=src_epsg
             )
-            with rasterio.open(str(new_name), 'w', **options) as out:
-                out.write(id_grid, indexes=1)
-
         else:
             raise ValueError('unknown format: %s' % (format, ))
 

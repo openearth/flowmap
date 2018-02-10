@@ -7,6 +7,7 @@ import pandas as pd
 import tqdm
 import geojson
 import netCDF4
+import rasterio
 
 logger = logging.getLogger(__name__)
 
@@ -331,7 +332,6 @@ def export_tables(filename, tables):
 
                 ds.variables[var][i] = val
 
-
 def import_tables(filename, arrays=True):
     """import tables from netcdf table dump"""
     with netCDF4.Dataset(filename) as ds:
@@ -353,6 +353,49 @@ def import_tables(filename, arrays=True):
             vars[key] = list(arr)
         tables = pd.DataFrame(vars, index=index)
     return tables
+
+
+def build_id_grid(grid, dem):
+    """create a map in the same shape as dem, with face number for each pixel"""
+    # generate geojson polygons
+    polys = grid.to_polys()
+    nodata = -999
+    # convert to raster with id as property
+    rasterized = rasterio.features.rasterize(
+        ((poly, i) for (i, poly) in enumerate(polys)),
+        out_shape=dem['band'].shape,
+        transform=dem['affine'],
+        fill=nodata
+    )
+    return rasterized
+
+
+def export_id_grid(filename, id_grid, affine, width, height, epsg):
+    """export the id grid to filename"""
+    nodata = -999
+    options = dict(
+        dtype=str(id_grid.dtype),
+        nodata=nodata,
+        count=1,
+        compress='lzw',
+        tiled=True,
+        blockxsize=256,
+        blockysize=256,
+        driver='GTiff',
+        affine=affine,
+        width=width,
+        height=height,
+        crs=rasterio.crs.CRS({'init': 'epsg:%d' % (epsg, )})
+    )
+    with rasterio.open(str(filename), 'w', **options) as out:
+        out.write(id_grid, indexes=1)
+
+
+def import_id_grid(id_grid_name):
+    with rasterio.open(str(id_grid_name)) as src:
+        # read band 0 (1-based)
+        band = src.read(1, masked=True)
+        return band
 
 
 def compute_interpolated(L, dem, data, s=None):
