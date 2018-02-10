@@ -65,16 +65,19 @@ class TestSubgrid(unittest.TestCase):
         pass
 
     def test_build_id_grid(self):
-        id_grid = subgrid.build_id_grid(self.grid, self.dem)
+        polys = self.grid.to_polys()
+        id_grid = subgrid.build_id_grid(polys, self.dem)
         assert len(id_grid) > 0
 
     def test_build_tables(self):
-        id_grid = subgrid.build_id_grid(self.grid, self.dem)
+        polys = self.grid.to_polys()
+        id_grid = subgrid.build_id_grid(polys, self.dem)
         tables = subgrid.build_tables(self.grid.ugrid, self.dem, id_grid)
         assert len(tables) > 0
 
     def test_subgrid(self):
-        id_grid = subgrid.build_id_grid(self.grid, self.dem)
+        polys = self.grid.to_polys()
+        id_grid = subgrid.build_id_grid(polys, self.dem)
         tables = subgrid.build_tables(self.grid.ugrid, self.dem, id_grid)
         assert len(tables) > 0
 
