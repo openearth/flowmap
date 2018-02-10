@@ -14,7 +14,6 @@ import netCDF4
 import numpy as np
 import pyugrid
 import geojson
-import pandas as pd
 
 # used for transforming into a vtk grid and for particles
 import tqdm
