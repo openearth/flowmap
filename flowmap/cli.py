@@ -255,7 +255,7 @@ def export(dataset, dem, format, **kwargs):
     """
     if format not in ['hull'] and not dem:
         raise click.UsageError(
-            'format {} requires dem, got {}'.format(format, dem)
+            'format {} requires DEM, got {}'.format(format, dem or 'nothing')
         )
 
 
