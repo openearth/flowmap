@@ -13,11 +13,13 @@ def read_dem(dem_filename):
         # read band 0 (1-based)
         band = src.read(1, masked=True)
         dem['band'] = band
+
+    dem['transform'] = src.get_transform()
+    dem['affine'] = src.affine
     # pixel sizes
     affine = src.affine
     dem['dxp'] = affine.a
     dem['dyp'] = -affine.e
-    dem['affine'] = affine
     dem['width'] = src.width
     dem['height'] = src.height
     def world2px(xy):
