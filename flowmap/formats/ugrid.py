@@ -366,12 +366,14 @@ class UGrid(NetCDF):
             )
             id_grid_path = pathlib.Path(id_grid_name)
             if id_grid_path.exists():
-                id_grid = subgrid.import_id_grid(dem)
+                id_grid = subgrid.import_id_grid(str(id_grid_path))
             else:
                 # warning message with suggestion for import command
-                command = 'flowmap export --format id_grid {} {}'.format(
-                    self.path,
-                    self.options['dem']
+                command = 'flowmap export --format id_grid {} {} --src_epsg {}'.format(
+
+                    pathlib.Path(self.path).relative_to(pathlib.Path('.').absolute()),
+                    pathlib.Path(self.options['dem']).relative_to(pathlib.Path('.').absolute()),
+                    self.src_epsg
                 )
                 msg = 'Create id_grid using the command: \n{}'.format(
                     command
@@ -390,7 +392,8 @@ class UGrid(NetCDF):
             subgrid.export_tables(new_name, tables)
         elif format == 'id_grid':
             dem = read_dem(self.options['dem'])
-            id_grid = self.build_id_grid(dem)
+            polys = self.to_polys()
+            id_grid = subgrid.build_id_grid(polys, dem)
             new_name = self.generate_name(
                 self.path,
                 suffix='.tiff',
@@ -402,7 +405,7 @@ class UGrid(NetCDF):
                 affine=dem['affine'],
                 width=dem['width'],
                 height=dem['height'],
-                epsg=src_epsg
+                epsg=self.src_epsg
             )
         else:
             raise ValueError('unknown format: %s' % (format, ))

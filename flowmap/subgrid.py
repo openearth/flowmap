@@ -52,10 +52,6 @@ def subgrid_compute(row, dem, method="waterlevel"):
         remaining_volume = vol_i - cum_volume_table[fill_idx - 1]
     else:
         remaining_volume = vol_i - cum_volume_table[0]
-    pixel_area = dem['dxp'] * dem['dyp']
-
-    # face_area = np.prod(dem_i.shape) * pixel_area
-    # TODO: check if this works
     face_area = row['face_area']
 
     # are we outside the volume table
@@ -346,10 +342,9 @@ def import_tables(filename, arrays=True):
     return tables
 
 
-def build_id_grid(grid, dem):
+def build_id_grid(polys, dem):
     """create a map in the same shape as dem, with face number for each pixel"""
     # generate geojson polygons
-    polys = grid.to_polys()
     nodata = -999
     # convert to raster with id as property
     rasterized = rasterio.features.rasterize(
