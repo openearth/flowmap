@@ -85,7 +85,7 @@ def build_interpolate(grid, values):
     return L
 
 
-def build_tables(grid, dem, id_grid, valid_range):
+def build_tables(grid, dem, id_grid, valid_range=None):
     """compute volume tables per cell"""
 
     if (valid_range is not None) and (None not in valid_range):
@@ -102,7 +102,7 @@ def build_tables(grid, dem, id_grid, valid_range):
     rows = []
     # TODO: run this in parallel (using concurrent futures)
     for id_, face in tqdm.tqdm(enumerate(faces), total=faces.shape[0], desc='table rows'):
-        # Use this for faster debugging of triangles
+        # # Use this for faster debugging of triangles
         # if id_ < 4700:
         #     continue
         # if id_ > 4800:
@@ -116,8 +116,14 @@ def build_tables(grid, dem, id_grid, valid_range):
             face_px[:, 1].min():face_px[:, 1].max(),
             face_px[:, 0].min():face_px[:, 0].max()
         ]
+        face_slice = [
+            face_px2slice[0].start,
+            face_px2slice[0].stop,
+            face_px2slice[1].start,
+            face_px2slice[1].stop
+        ]
         dem_i = dem['band'][face_px2slice]
-        ids_i_mask  = id_grid[face_px2slice] != id_
+        ids_i_mask = id_grid[face_px2slice] != id_
         # we have three conditions to exclude a cell
         masks = [
             # dem is missing
@@ -156,7 +162,8 @@ def build_tables(grid, dem, id_grid, valid_range):
         ]
         record = dict(
             id=id_,
-            slice=face_px2slice,
+            # TODO: convert to 4 numbers
+            slice=face_slice,
             face=face,
             face_area=face_area,
             volume_table=volume_table,
@@ -166,8 +173,6 @@ def build_tables(grid, dem, id_grid, valid_range):
             bin_edges=bin_edges
         )
         rows.append(record)
-
-
 
     tables = pd.DataFrame.from_records(rows).set_index('id')
     return tables
@@ -310,14 +315,14 @@ def create_export(filename, n_cells, n_bins):
 def export_tables(filename, tables):
     """store tables in netcdf file, create file with create_export"""
     with netCDF4.Dataset(filename, 'r+') as ds:
-        for i, row in tqdm.tqdm(
-                tables.reset_index().iterrows(),
-                total=len(tables),
-                desc='exporting'
+        for (i, row) in tqdm.tqdm(
+            tables.reset_index().iterrows(),
+            total=len(tables),
+            desc='exporting'
         ):
             for var in [
                 'bin_edges', 'cum_volume_table', 'volume_table',
-                'extent', 'n_per_bin', 'face_area'
+                'extent', 'n_per_bin', 'face_area', 'slice'
             ]:
                 val = row[var]
                 # skip none
@@ -325,12 +330,6 @@ def export_tables(filename, tables):
                     continue
 
                 ds.variables[var][i] = val
-            ds.variables['slice'][i] = [
-                row.slice[0].start,
-                row.slice[0].stop,
-                row.slice[1].start,
-                row.slice[1].stop
-            ]
 
 
 def import_tables(filename, arrays=True):
@@ -339,9 +338,9 @@ def import_tables(filename, arrays=True):
         vars = {}
         index = np.arange(ds.variables['bin_edges'].shape[0])
         for var in [
-                'bin_edges', 'cum_volume_table',
-                'volume_table', 'extent', 'n_per_bin',
-                'slice', 'face_area'
+            'bin_edges', 'cum_volume_table',
+            'volume_table', 'extent', 'n_per_bin',
+            'slice', 'face_area'
         ]:
             arr = ds.variables[var][:]
             vars[var] = arr
@@ -357,7 +356,9 @@ def import_tables(filename, arrays=True):
 
 
 def compute_interpolated(L, dem, data, s=None):
-    """compute a map of interpolated waterdepth, masked where detailed topography >= interpolated waterlevel, optionally sliced by a tuple (s) of row, column slices"""
+    """compute a map of interpolated waterdepth,
+    masked where detailed topography >= interpolated waterlevel,
+    optionally sliced by a tuple (s) of row, column slices"""
     if s is None:
         s = np.s_[:, :]
 

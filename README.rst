@@ -41,25 +41,30 @@ If you have docker installed you can download the software using the command:
 .. code:: bash
 
   docker pull openearth/flowmap
+  # you can then run all commands in docker, for example
+  docker run openearth/flowmap --help
 
 You can run the software by typing the command (for now please prepend the flowmap command with `/opt/conda/envs/py35/bin`.
 
 .. code:: bash
 
   # help
-  docker run openearth/flowmap flowmap --help
+  flowmap --help
 
   # help per command
-  docker run openearth/flowmap flowmap generate --help
+  flowmap generate --help
 
-  # generate flowmap
-  docker run openearth/flowmap flowmap generate delft3doutput.nc --src_epsg=28992 --dst_epsg=3857
+  # generate flowmap (for openearth/painting)
+  flowmap generate delft3doutput.nc --src_epsg=28992 --dst_epsg=3857
 
-  # compute subgrid interpolation
-  docker run openearth/flowmap flowmap subgrid delft3doutput.nc  aw_refi_def_asc.tiff --src_epsg=28992
+  # export tables to nc format for faster subgrid calculations
+  flowmap export --format tables --src_epsg=28992 delft3doutput.nc  aw_refi_def_asc.tiff --valid-range -10 10
 
-  # export tables to nc format
-  docker run openearth/flowmap flowmap export --format tables --src_epsg=28992 delft3doutput.nc  aw_refi_def_asc.tiff
+  # export id grid (for faster lookups)
+  flowmap export --format id_grid --src_epsg 28992 groesbeek_map.nc aw_ahn_d_asc.tiff
+
+  # compute subgrid interpolation (for last timestep)
+  flowmap subgrid delft3doutput.nc  aw_refi_def_asc.tiff --src_epsg=28992 --timestep -1
 
   # regrid the output to a tiff file can be done with gdal
   gdal_grid -zfield subgrid_waterlevel groesbeek_map_waterlevel_last.geojson groesbeek_map_waterlevel_last_idw.tiff -outsize 16069 20071 -a invdistnn:power=3.0:max_points=4:radius=8 -txe 188819.156 196867.156  -tye 426992.399 416956.899
