@@ -77,6 +77,12 @@ In the case of Delft3D you can convert the default nefis output to netCDF using 
 There is also direct nefis support in development, but that has not been properly tested.
 By default you will want to project to the web mercator projection. Then you can reuse the velocities as pixels/s in an animation.
 
+Exporting files
+---------------
+There are several export files that can be generated using the `flowmap export` command.
+
+The `id_grid` is needed to export `tables`. The subgrid `tables` are needed for the subgrid command. The `hull` file is needed for interpolation and for flowmaps. File names are generated based on the grid name in the format: [grid_name]_[export_name].[suffix] and placed next to the grid file.
+
 
 
 Features

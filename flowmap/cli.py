@@ -251,7 +251,12 @@ def subgrid(dataset, dem, timestep, method, format, **kwargs):
     default=(None, None)
 )
 def export(dataset, dem, format, **kwargs):
-    """Create a geojson file"""
+    """Export a file. The `id_grid` is needed to export tables.
+    The subgrid `tables` are needed for the subgrid command.
+    The `hull` file is needed for interpolation and for flowmaps.
+    File names are generated based on the grid name in the format:
+    [grid_name]_[export_name].[suffix]
+    """
     klass = flowmap.formats.get_format(dataset, **kwargs)
     ds = klass(dataset, dem=dem, **kwargs)
     logger.info("exporting grid")
