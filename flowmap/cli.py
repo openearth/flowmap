@@ -196,27 +196,17 @@ def streamlines(dataset, timestep, **kwargs):
     default=-1
 )
 @click.option(
-    "--method",
-    type=click.Choice(['waterdepth', 'waterlevel', 'interpolate']),
-    default="waterlevel"
-)
-@click.option(
-    "--format",
-    type=click.Choice(['.geojson', '.tiff']),
-    default=".geojson"
-)
-@click.option(
     "--src_epsg",
     type=int,
     required=True
 )
-def subgrid(dataset, dem, timestep, method, format, **kwargs):
-    """Create a-posteriori subgrid map for the dataset. By default based on the last timestep"""
+def subgrid(dataset, dem, timestep, **kwargs):
+    """Create a-posteriori subgrid map for the dataset. By default based on the last timestep. If method `waterdepth` is used it generates a geojson file with subgrid waterdepth per cell. If method `waterlevel` is used it also generates a tiff file with subgrid waterlevels (interpolated waterdepth - dem) per pixel."""
     klass = flowmap.formats.get_format(dataset, **kwargs)
     ds = klass(dataset, dem=dem, **kwargs)
     logger.info("extracting subgrid")
     if hasattr(ds, 'subgrid'):
-        ds.subgrid(timestep, method=method, format=format)
+        ds.subgrid(timestep)
     else:
         raise ValueError('subgrid not yet supported for format', klass)
 
@@ -233,7 +223,8 @@ def subgrid(dataset, dem, timestep, method, format, **kwargs):
     type=click.Path(
         exists=True,
         resolve_path=True
-    )
+    ),
+    required=False
 )
 @click.option(
     "--format",
@@ -251,7 +242,19 @@ def subgrid(dataset, dem, timestep, method, format, **kwargs):
     default=(None, None)
 )
 def export(dataset, dem, format, **kwargs):
-    """Create a geojson file"""
+    """Export a file. The `id_grid` is needed to export tables.
+    The subgrid `tables` are needed for the subgrid command.
+    The `hull` file is needed for interpolation and for flowmaps.
+    File names are generated based on the grid name in the format:
+    [grid_name]_[export_name].[suffix]
+    """
+    if format not in ['hull'] and not dem:
+        raise click.UsageError(
+            'format {} requires DEM, got {}'.format(format, dem or 'nothing')
+        )
+
+
+
     klass = flowmap.formats.get_format(dataset, **kwargs)
     ds = klass(dataset, dem=dem, **kwargs)
     logger.info("exporting grid")

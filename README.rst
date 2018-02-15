@@ -63,11 +63,8 @@ You can run the software by typing the command (for now please prepend the flowm
   # export id grid (for faster lookups)
   flowmap export --format id_grid --src_epsg 28992 groesbeek_map.nc aw_ahn_d_asc.tiff
 
-  # compute subgrid interpolation (for last timestep)
+  # compute subgrid method and interpolation (for last timestep)
   flowmap subgrid delft3doutput.nc  aw_refi_def_asc.tiff --src_epsg=28992 --timestep -1
-
-  # regrid the output to a tiff file can be done with gdal
-  gdal_grid -zfield subgrid_waterlevel groesbeek_map_waterlevel_last.geojson groesbeek_map_waterlevel_last_idw.tiff -outsize 16069 20071 -a invdistnn:power=3.0:max_points=4:radius=8 -txe 188819.156 196867.156  -tye 426992.399 416956.899
 
   # extracting the relevant contour
   gdalwarp -q -cutline "D:/11201337 Water op Straat WS Rivierenland/008. Model/B. Results/LeerdamWest/case14/Leerdam_contour.shp" -tr 0.5 0.5 "D:/11201337 Water op Straat WS Rivierenland/008. Model/F. Post Subgrid/Leerdam/from Fedor/wd_v20180131.tif"
@@ -76,6 +73,12 @@ You can run the software by typing the command (for now please prepend the flowm
 In the case of Delft3D you can convert the default nefis output to netCDF using the vs_trim2nc.m matlab script.
 There is also direct nefis support in development, but that has not been properly tested.
 By default you will want to project to the web mercator projection. Then you can reuse the velocities as pixels/s in an animation.
+
+Exporting files
+---------------
+There are several export files that can be generated using the `flowmap export` command.
+
+The `id_grid` is needed to export `tables`. The subgrid `tables` are needed for the subgrid command. The `hull` file is needed for interpolation and for flowmaps. File names are generated based on the grid name in the format: [grid_name]_[export_name].[suffix] and placed next to the grid file.
 
 
 

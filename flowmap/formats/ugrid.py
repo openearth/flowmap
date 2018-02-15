@@ -14,11 +14,9 @@ import netCDF4
 import numpy as np
 import pyugrid
 import geojson
-import pandas as pd
 
 # used for transforming into a vtk grid and for particles
 import tqdm
-import skimage.draw
 from tvtk.api import tvtk
 import rasterio
 import rasterio.mask
@@ -143,10 +141,10 @@ class UGrid(NetCDF):
 
     def to_polydata(self):
         """convert grid to a vtk polydata object"""
-        grid = self.ugrid
+        ugrid = self.ugrid
 
-        faces = grid['faces']
-        points = grid['points']
+        faces = ugrid['faces']
+        points = ugrid['points']
 
         n_cells = faces.shape[0]
 
@@ -219,7 +217,7 @@ class UGrid(NetCDF):
         )
         # create a new name
         path = pathlib.Path(self.path)
-        new_name = path.with_name(path.stem + '_streamlines').with_suffix('.geojson')
+        new_name = path.with_name(path.stem + '_streamlines').with_suffix('.json')
         # save the particles
         particles.export_lines(lines, str(new_name))
 
@@ -245,121 +243,105 @@ class UGrid(NetCDF):
         )
         return is_grid
 
-    def build_id_grid(self, dem):
-        """create a map in the same shape as dem, with face number for each pixel"""
-        id_grid_name = self.generate_name(
-            self.path,
-            suffix='.tiff',
-            topic='id_grid'
-        )
-        # grid already exists
-        if id_grid_name.exists():
-            logger.info('returning existing id grid {}'.format(id_grid_name))
-            with rasterio.open(str(id_grid_name)) as src:
-                # read band 0 (1-based)
-                band = src.read(1, masked=True)
-                return band
-
-        polys = self.to_polys()
-        nodata = -999
-        rasterized = rasterio.features.rasterize(
-            ((poly, i) for (i, poly) in enumerate(polys)),
-            out_shape=dem['band'].shape,
-            transform=dem['affine'],
-            fill=nodata
-        )
-        return rasterized
-
-    def subgrid(self, t, method, format='.geojson'):
+    def subgrid(self, t):
         """compute refined waterlevel using detailled dem, using subgrid or interpolate method"""
         dem = read_dem(self.options['dem'])
-        grid = self.ugrid
+        ugrid = self.ugrid
         data = self.waterlevel(t)
-        if method in ('waterdepth', 'waterlevel'):
 
-            # this is slow
-            table_name = self.generate_name(
-                self.path,
-                suffix='.nc',
-                topic='tables'
-            )
-            table_path = pathlib.Path(table_name)
-            if table_path.exists():
-                logger.info('reading subgrid tables from %s', table_path)
-                tables = subgrid.import_tables(str(table_path))
-            else:
-                logger.info('creating subgrid tables')
-                # TODO: give warning / error if tables or id_grid have not been created
-                id_grid = self.build_id_grid(dem)
-                # no default valid range
-                tables = subgrid.build_tables(grid, dem, id_grid, valid_range=None)
-                # TODO: after creating and build id grid,
-                # save them.
-
-            logger.info('computing subgrid band')
-            if format == '.geojson':
-                if method == 'waterdepth':
-                    raise ValueError('waterdepth method only has .tiff format output')
-                feature_collection = subgrid.compute_features(grid, dem, tables, data, method=method)
-            elif format == '.tiff':
-                # this is also slow
-                band = subgrid.compute_band(grid, dem, tables, data, method=method)
-        elif method == 'interpolate':
-            format = '.tiff'
-            values = np.c_[data['s1'], data['vol1'], data['waterdepth']]
-            # create a grid mask for the dem
-            is_grid = self.build_is_grid(dem)
-            logger.info('building interpolation')
-            L = subgrid.build_interpolate(grid, values)
-            logger.info('computing interpolation for current timestep')
-            interpolated = subgrid.compute_interpolated(L, dem, data)
-            band = interpolated['masked_waterdepth']
-            # mask out non grid pixels
-            band.mask = np.logical_or(band.mask, ~is_grid)
-        else:
-            raise ValueError('unknown method')
-
-        new_name = self.generate_name(
+        # this is slow
+        table_name = self.generate_name(
             self.path,
-            suffix=format,
-            topic=method,
+            suffix='.nc',
+            topic='tables'
+        )
+        # We need these two tables to do our computations
+        table_path = pathlib.Path(table_name)
+
+        # check if they exist
+        if table_path.exists():
+            logger.info('reading subgrid tables from %s', table_path)
+            tables = subgrid.import_tables(str(table_path))
+        else:
+            command = 'flowmap export --format tables {} {}'.format(
+                self.path,
+                self.options['dem']
+            )
+            msg = 'Create subgrid tables using the command: \n{}'.format(
+                command
+            )
+            logger.warn(msg)
+            raise IOError('Subgrid tables not found')
+
+        logger.info('computing subgrid features')
+        feature_collection = subgrid.compute_waterlevels(
+            ugrid,
+            dem,
+            tables,
+            data
+        )
+        waterlevel_name = self.generate_name(
+            self.path,
+            suffix='.json',
+            topic='waterlevel',
             counter=t
         )
-        if format == '.geojson':
-            logger.info('writing subgrid features')
-            # save featuress
-            crs = geojson.crs.Named(
-                properties={
-                    "name": "urn:ogc:def:crs:EPSG::{:d}".format(self.src_epsg)
-                }
+        logger.info('writing waterlevels features to {}'.format(waterlevel_name))
+        # save featuress
+        crs = geojson.crs.Named(
+            properties={
+                "name": "urn:ogc:def:crs:EPSG::{:d}".format(self.src_epsg)
+            }
+        )
+        feature_collection['crs'] = crs
+        with open(waterlevel_name, 'w') as f:
+            geojson.dump(feature_collection, f, cls=CustomEncoder, allow_nan=False, ignore_nan=True)
+
+        # interpolate waterlevels to grid (this is file based)
+        interpolated_waterlevel_name = self.generate_name(
+            self.path,
+            suffix='.tiff',
+            topic='waterlevel_idw',
+            counter=t
+        )
+        logger.info(
+            'writing interpolated waterlevels to {}'.format(
+                interpolated_waterlevel_name
             )
-            feature_collection['crs'] = crs
-            with open(new_name, 'w') as f:
-                geojson.dump(feature_collection, f, cls=CustomEncoder, allow_nan=False, ignore_nan=True)
-        elif format == '.tiff':
-            logger.info('writing subgrid band')
-            # use extreme value as nodata
-            try:
-                nodata = np.finfo(band.dtype).min
-            except ValueError:
-                # for ints use a negative value
-                nodata = -99999
-            options = dict(
-                dtype=str(band.dtype),
-                nodata=nodata,
-                count=1,
-                compress='lzw',
-                tiled=True,
-                blockxsize=256,
-                blockysize=256,
-                driver='GTiff',
-                affine=dem['affine'],
-                width=dem['width'],
-                height=dem['height'],
-                crs=rasterio.crs.CRS({'init': 'epsg:%d' % (self.src_epsg)})
+        )
+        subgrid.interpolate_waterlevels(
+            waterlevel_name,
+            interpolated_waterlevel_name,
+            dem,
+            epsg=self.src_epsg
+        )
+        # interpolated_waterlevel_name is now created
+        with rasterio.open(str(interpolated_waterlevel_name)) as ds:
+            interpolated_waterlevel = ds.read(1, masked=True)
+
+        waterdepth_name = self.generate_name(
+            self.path,
+            suffix='.tiff',
+            topic='waterdepth',
+            counter=t
+        )
+        logger.info(
+            'writing waterdepth to {}'.format(
+                waterdepth_name
             )
-            with rasterio.open(str(new_name), 'w', **options) as dst:
-                dst.write(band.filled(nodata), 1)
+        )
+        # now for the final computation
+        waterdepth = interpolated_waterlevel - dem['band']
+        # save results
+        subgrid.export_grid(
+            waterdepth_name,
+            waterdepth,
+            affine=dem['affine'],
+            width=dem['width'],
+            height=dem['height'],
+            epsg=self.src_epsg
+        )
+
 
     def export(self, format, **kwargs):
         """export dataset"""
@@ -390,9 +372,33 @@ class UGrid(NetCDF):
                 geojson.dump(feature, f, cls=CustomEncoder, allow_nan=False, ignore_nan=True)
         elif format == 'tables':
             dem = read_dem(self.options['dem'])
-            id_grid = self.build_id_grid(dem)
-            grid = self.ugrid
-            tables = subgrid.build_tables(grid, dem, id_grid, kwargs.get('valid_range'))
+
+            # lookup id grid and give instructions how
+            # to create it if it doesn't exist
+            id_grid_name = self.generate_name(
+                self.path,
+                suffix='.tiff',
+                topic='id_grid'
+            )
+            id_grid_path = pathlib.Path(id_grid_name)
+            if id_grid_path.exists():
+                id_grid = subgrid.import_id_grid(str(id_grid_path))
+            else:
+                # warning message with suggestion for import command
+                command = 'flowmap export --format id_grid {} {} --src_epsg {}'.format(
+
+                    pathlib.Path(self.path).relative_to(pathlib.Path('.').absolute()),
+                    pathlib.Path(self.options['dem']).relative_to(pathlib.Path('.').absolute()),
+                    self.src_epsg
+                )
+                msg = 'Create id_grid using the command: \n{}'.format(
+                    command
+                )
+                logger.warn(msg)
+                raise IOError('Id Grid not found')
+            id_grid = subgrid.import_id_grid(id_grid_path)
+            ugrid = self.ugrid
+            tables = subgrid.build_tables(ugrid, dem, id_grid, kwargs.get('valid_range'))
             new_name = self.generate_name(
                 self.path,
                 suffix='.nc',
@@ -402,31 +408,21 @@ class UGrid(NetCDF):
             subgrid.export_tables(new_name, tables)
         elif format == 'id_grid':
             dem = read_dem(self.options['dem'])
-            id_grid = self.build_id_grid(dem)
+            polys = self.to_polys()
+            id_grid = subgrid.build_id_grid(polys, dem)
             new_name = self.generate_name(
                 self.path,
                 suffix='.tiff',
                 topic=format
             )
-            nodata = -999
-            options = dict(
-                dtype=str(id_grid.dtype),
-                nodata=nodata,
-                count=1,
-                compress='lzw',
-                tiled=True,
-                blockxsize=256,
-                blockysize=256,
-                driver='GTiff',
+            subgrid.export_grid(
+                new_name,
+                id_grid,
                 affine=dem['affine'],
                 width=dem['width'],
                 height=dem['height'],
-                crs=rasterio.crs.CRS({'init': 'epsg:%d' % (self.src_epsg)})
-
+                epsg=self.src_epsg
             )
-            with rasterio.open(str(new_name), 'w', **options) as out:
-                out.write(id_grid, indexes=1)
-
         else:
             raise ValueError('unknown format: %s' % (format, ))
 
