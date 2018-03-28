@@ -261,7 +261,11 @@ class UGrid(NetCDF):
         # check if they exist
         if table_path.exists():
             logger.info('reading subgrid tables from %s', table_path)
+            # tables are now in array format with metadata
             tables = subgrid.import_tables(str(table_path))
+            metadata = tables['metadata']
+            # get the valid range
+            valid_range = metadata.get('valid_range')
         else:
             command = 'flowmap export --format tables {} {}'.format(
                 self.path,
@@ -319,6 +323,23 @@ class UGrid(NetCDF):
         with rasterio.open(str(interpolated_waterlevel_name)) as ds:
             interpolated_waterlevel = ds.read(1, masked=True)
 
+        # buildings are now partially filtered out, values in waterlevels are interpolated into the buildings (radius 8)
+        # apply invalid dem mask (filter out buildings) to leave out these cells in the waterdepth
+        invalid_mask = False
+        if valid_range is not None:
+            invalid_mask = np.logical_or(
+                dem['band'] < valid_range[0],
+                dem['band'] > valid_range[1]
+            )
+        mask = np.logical_or(
+            interpolated_waterlevel.mask,
+            invalid_mask
+        )
+
+        interpolated_waterlevel = np.ma.masked_array(
+            interpolated_waterlevel,
+            mask
+        )
         waterdepth_name = self.generate_name(
             self.path,
             suffix='.tiff',
@@ -341,7 +362,6 @@ class UGrid(NetCDF):
             height=dem['height'],
             epsg=self.src_epsg
         )
-
 
     def export(self, format, **kwargs):
         """export dataset"""
@@ -404,7 +424,8 @@ class UGrid(NetCDF):
                 suffix='.nc',
                 topic=format
             )
-            subgrid.create_export(new_name, n_cells=len(tables), n_bins=20)
+            # save options to the netcdf file
+            subgrid.create_export(new_name, n_cells=len(tables), n_bins=20, attributes=kwargs)
             subgrid.export_tables(new_name, tables)
         elif format == 'id_grid':
             dem = read_dem(self.options['dem'])

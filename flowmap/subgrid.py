@@ -16,6 +16,19 @@ logger = logging.getLogger(__name__)
 NODATA = -9999
 
 
+class MetaArray(np.ndarray):
+    """Array with metadata."""
+    def __new__(cls, array, dtype=None, order=None, **kwargs):
+        obj = np.asarray(array, dtype=dtype, order=order).view(cls)
+        obj.metadata = kwargs
+        return obj
+
+    def __array_finalize__(self, obj):
+        if obj is None:
+            return
+        self.metadata = getattr(obj, 'metadata', None)
+
+
 def data_for_idx(face_idx, dem, grid, data):
     """get data for cell with face_idx face_idx"""
     face = grid['face_coordinates'][face_idx]
@@ -122,8 +135,7 @@ def build_tables(ugrid, dem, id_grid, valid_range=None):
             )
 
         mask = np.logical_or.reduce(masks)
-        # TOOD: als mask using id grid here....
-        if dem_i.mask.any():
+        if dem_i.mask.any() or mask.all():
             n_per_bin, bin_edges = None, None
             volume_table = None
             cum_volume_table = None
@@ -143,7 +155,6 @@ def build_tables(ugrid, dem, id_grid, valid_range=None):
         ]
         record = dict(
             id=id_,
-            # TODO: convert to 4 numbers
             slice=face_slice,
             face=face,
             face_area=face_area,
@@ -177,8 +188,10 @@ def compute_waterlevels(grid, dem, tables, data):
     for face_id in tqdm.tqdm(face_ids, desc='subgrid compute'):
         row = {}
         for key, var in tables.items():
-            row[key] = var[face_id]
+            if key == 'metadata':
+                continue
 
+            row[key] = var[face_id]
         result = compute_waterlevel_per_cell(row, dem=dem)
         results.append(result)
     tables['subgrid_waterlevel'] = results
@@ -237,7 +250,7 @@ def interpolate_waterlevels(waterlevel_file, interpolated_waterlevel_file, dem, 
     return
 
 
-def create_export(filename, n_cells, n_bins):
+def create_export(filename, n_cells, n_bins, attributes=None):
     """create an export file for subgrid tables"""
 
     dimensions = {
@@ -301,6 +314,9 @@ def create_export(filename, n_cells, n_bins):
                 dimensions=var['dimensions']
             )
             ncvar.setncattr('long_name', var['long_name'])
+        if attributes:
+            # store attribute
+            ds.setncatts(attributes)
 
 
 def export_tables(filename, tables):
@@ -322,11 +338,17 @@ def export_tables(filename, tables):
 
                 ds.variables[var][i] = val
 
-def import_tables(filename, arrays=True):
+
+def import_tables(filename):
     """import tables from netcdf table dump"""
     with netCDF4.Dataset(filename) as ds:
+        # lookup metadata
+        metadata = {
+            key: getattr(ds, key)
+            for key
+            in ds.ncattrs()
+        }
         vars = {}
-        index = np.arange(ds.variables['bin_edges'].shape[0])
         for var in [
             'bin_edges', 'cum_volume_table',
             'volume_table', 'extent', 'n_per_bin',
@@ -335,13 +357,8 @@ def import_tables(filename, arrays=True):
             arr = ds.variables[var][:]
             vars[var] = arr
     # fast approach, use just numpy array
-    if arrays:
-        tables = vars
-    else:
-        # this is slow for large number of cells
-        for key, arr in vars.items():
-            vars[key] = list(arr)
-        tables = pd.DataFrame(vars, index=index)
+    tables = vars
+    tables['metadata'] = metadata
     return tables
 
 
