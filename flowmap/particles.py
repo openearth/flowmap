@@ -9,7 +9,7 @@ import geojson
 def make_tracer_pipeline(
         polydata,
         seed,
-        maximum_number_of_steps=200,
+        maximum_number_of_steps=3000,
         maximum_propagation=1000
 ):
     """Make a tracer pileine based on a polydata and seed.
