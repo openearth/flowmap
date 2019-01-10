@@ -7,7 +7,8 @@ RUN \
     echo "deb http://httpredir.debian.org/debian jessie-backports main non-free" >> /etc/apt/sources.list && \
     echo "deb-src http://httpredir.debian.org/debian jessie-backports main non-free" >> /etc/apt/sources.list && \
     apt-get update --fix-missing && \
-    apt-get install -y ffmpeg wget unzip
+    apt-get install -y ffmpeg wget unzip &&
+    apt-get install nfs-common
 
 # install everything from condaforge
 RUN conda create -y -n py35 python=3.5
