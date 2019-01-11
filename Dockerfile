@@ -11,6 +11,7 @@ RUN conda install -c conda-forge libgdal gdal
 # install flowmap
 COPY ./ app/
 RUN pip install pip --upgrade
+RUN pip install -r app/requirements_dev.txt
 RUN pip install -r app/requirements.txt
 RUN cd app/ && \
 	python setup.py install
