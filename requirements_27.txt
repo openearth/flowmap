@@ -1,0 +1,8 @@
+pathlib
+matplotlib
+click
+tqdm
+pandas
+netCDF4
+scikit-image
+gdal

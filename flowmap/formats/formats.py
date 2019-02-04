@@ -6,10 +6,22 @@ import numpy as np
 import matplotlib.colors
 import tqdm
 
+try:
+    from functools import lru_cache
+except ImportError:
+    from repoze.lru import lru_cache
+    lru_cache = functools.partial(lru_cache, 500)
+
 logger = logging.getLogger(__name__)
 
 # what to export on import from *, also used to get a list of available formats
 
+def get_formats():
+    """return a list of all available formats"""
+    from .matroos import Matroos
+    from .ugrid import UGrid
+    from .delft3d import Delft3DMatlab
+    return [UGrid, Matroos, Delft3DMatlab]
 
 def get_format(dataset, **kwargs):
     """get the format for the dataset"""
@@ -52,7 +64,7 @@ def transform(x, y, transformation):
     return X_t, Y_t
 
 
-@functools.lru_cache()
+@lru_cache()
 def build_fill_rules():
     """define fill rules for a 5x5 matrix"""
     m = 2

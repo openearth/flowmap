@@ -8,7 +8,7 @@ import numpy as np
 import click
 import uuid
 
-import flowmap.formats
+from .formats import get_format, get_formats
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -267,8 +267,7 @@ def export(dataset, dem, format, **kwargs):
 def formats():
     """List the available formats"""
     available_formats = []
-    for name in dir(flowmap.formats):
-        format = getattr(flowmap.formats, name)
+    for format in get_formats():
         # looks like a format
         if hasattr(format, "dump"):
             available_formats.append(name)

@@ -316,7 +316,12 @@ def create_export(filename, n_cells, n_bins, attributes=None):
             ncvar.setncattr('long_name', var['long_name'])
         if attributes:
             # store attribute
-            ds.setncatts(attributes)
+            for key, val in attributes.items():
+                try:
+                    ds.setncattr(key, val)
+                except TypeError:
+                    pass
+
 
 
 def export_tables(filename, tables):
