@@ -460,4 +460,4 @@ class UGrid(NetCDF):
             else:
                 base += '_%06d' % (counter, )
         new_name = path.with_name(base).with_suffix(suffix)
-        return new_name
+        return str(new_name)
