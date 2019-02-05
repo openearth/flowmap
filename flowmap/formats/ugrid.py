@@ -58,7 +58,7 @@ class UGrid(NetCDF):
         with netCDF4.Dataset(self.path) as ds:
             variables = ds.variables.keys()
         # for now we hardcode the filenames. This can be replaced by the pyugrid, once released
-        for var in ("mesh2d_ucx", "mesh2d_ucy", "mesh2d_face_nodes", "mesh2d_node_x", "mesh2d_node_x"):
+        for var in ("mesh2d_face_nodes", "mesh2d_node_x", "mesh2d_node_x"):
             if var not in variables:
                 logger.warn(
                     "%s not found in variables of file %s",

@@ -320,9 +320,7 @@ def create_export(filename, n_cells, n_bins, attributes=None):
                 try:
                     ds.setncattr(key, val)
                 except TypeError:
-                    pass
-
-
+                    logger.exception('could not set {} to {}'.format(key, val))
 
 def export_tables(filename, tables):
     """store tables in netcdf file, create file with create_export"""

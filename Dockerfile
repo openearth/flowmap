@@ -2,8 +2,9 @@ FROM continuumio/miniconda3
 MAINTAINER Fedor Baart <fedor.baart@deltares.nl>
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 # update system and install wget
-RUN apt-get update --fix-missing && \
-	apt-get install -y ffmpeg wget unzip libglu1-mesa-dev gcc\
+RUN \
+    apt-get update --fix-missing && \
+    apt-get install -y ffmpeg wget unzip libglu1-mesa-dev gcc nfs-common && \
 	&& rm -rf /var/lib/apt/lists/*
 
 RUN conda install -c conda-forge libgdal gdal

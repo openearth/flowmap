@@ -138,5 +138,8 @@ def export_lines(lines, filename):
         feature = geojson.Feature(id=line['SeedIds'], geometry=linestring, properties=properties)
         features.append(feature)
     fc = geojson.FeatureCollection(features=features)
+    # encode in chunks for optimal memory use
+    encoder = geojson.GeoJSONEncoder()
     with open(filename, 'w') as f:
-        geojson.dump(fc, f)
+        for chunk in encoder.iterencode(fc):
+            f.write(chunk)
