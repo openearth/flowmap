@@ -2,7 +2,7 @@ Click==7.0
 mayavi==4.6.2
 netcdf4==1.4.2
 scikit-image==0.14.1
-numpy==1.15.4
+numpy==1.17.2
 scipy==1.1.0
 tqdm==4.28.1
 geojson==2.4.1
