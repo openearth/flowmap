@@ -15,9 +15,10 @@ def read_dem(dem_filename):
         dem['band'] = band
 
     dem['transform'] = src.get_transform()
-    dem['affine'] = src.affine
+    # is the affine transformation
+    dem['affine'] = src.transform
     # pixel sizes
-    affine = src.affine
+    affine = dem['affine']
     dem['dxp'] = affine.a
     dem['dyp'] = -affine.e
     dem['width'] = src.width
