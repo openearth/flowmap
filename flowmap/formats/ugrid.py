@@ -210,9 +210,9 @@ class UGrid(NetCDF):
         """lookup the waterlevel, depth and volume on timestep t"""
         # TODO: inspect mesh variable
         with netCDF4.Dataset(self.path) as ds:
-            s1 = ds.variables['mesh2d_s1'][t]
-            waterdepth = ds.variables['mesh2d_waterdepth'][t]
-            vol1 = ds.variables['mesh2d_vol1'][t]
+            s1 = ds.variables[self.mesh2d + '_s1'][t]
+            waterdepth = ds.variables[self.mesh2d + '_waterdepth'][t]
+            vol1 = ds.variables[self.mesh2d + '_vol1'][t]
         return dict(
             s1=s1,
             vol1=vol1,
@@ -224,8 +224,8 @@ class UGrid(NetCDF):
         # TODO: inspect mesh variables
         with netCDF4.Dataset(self.path) as ds:
             # cumulative velocities
-            ucx = ds.variables['mesh2d_ucx'][t]
-            ucy = ds.variables['mesh2d_ucy'][t]
+            ucx = ds.variables[self.mesh2d + '_ucx'][t]
+            ucy = ds.variables[self.mesh2d + '_ucy'][t]
 
         return dict(
             ucx=ucx,
