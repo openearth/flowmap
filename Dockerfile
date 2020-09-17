@@ -5,7 +5,7 @@ ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 RUN \
     apt-get update --fix-missing && \
     apt-get install -y ffmpeg wget unzip libglu1-mesa-dev gcc nfs-common && \
-	&& rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/*
 
 RUN conda install -c conda-forge libgdal gdal
 
