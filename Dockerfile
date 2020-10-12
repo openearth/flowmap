@@ -7,7 +7,8 @@ RUN \
     apt-get install -y ffmpeg wget unzip libglu1-mesa-dev gcc nfs-common && \
     rm -rf /var/lib/apt/lists/*
 
-RUN conda install -c conda-forge libgdal gdal
+RUN conda config --add channels conda-forge
+RUN conda install libgdal gdal vtk mayavi netcdf4 numpy scipy scikit-image matplotlib pandas rasterio Shapely pillow cython
 
 # install flowmap
 COPY ./ app/
