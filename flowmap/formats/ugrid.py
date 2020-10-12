@@ -12,7 +12,9 @@ import pathlib
 
 import netCDF4
 import numpy as np
-import pyugrid
+# rename because I already named my variable ugrid
+from gridded.pyugrid import ugrid as pyugrid
+from gridded.pyugrid import read_netcdf
 import geojson
 
 # used for transforming into a vtk grid and for particles
@@ -22,6 +24,10 @@ import rasterio
 import rasterio.mask
 import rasterio.crs
 import shapely.geometry
+
+from shapely import speedups
+# TODO: check if needed in container
+speedups.disable()
 
 from .netcdf import NetCDF
 from .. import particles
@@ -53,27 +59,32 @@ class UGrid(NetCDF):
 
     def validate(self):
         """validate a file"""
-        valid = True
+        valid = False
 
         with netCDF4.Dataset(self.path) as ds:
-            variables = ds.variables.keys()
-        # for now we hardcode the filenames. This can be replaced by the pyugrid, once released
-        for var in ("mesh2d_face_nodes", "mesh2d_node_x", "mesh2d_node_x"):
-            if var not in variables:
-                logger.warn(
-                    "%s not found in variables of file %s",
-                    var,
-                    self.path
-                )
-                valid = False
-                return valid
+            conventions = getattr(ds, 'Conventions', '')
+            if 'ugrid' in conventions.lower():
+                valid = True
         return valid
+
+
+    @property
+    def mesh2d(self):
+        with netCDF4.Dataset(self.path) as ds:
+            mesh_names = read_netcdf.find_mesh_names(ds)
+            if not mesh_names:
+                raise ValueError('No meshes found in {}'.format(self.path))
+            for mesh_name in mesh_names:
+                var = ds.variables[mesh_name]
+                if var.topology_dimension == 2:
+                    return mesh_name
+        raise ValueError('No 2d mesh found in {}'.format(mesh_names))
 
     @property
     def ugrid(self):
         """Generate a ugrid grid from the input"""
         # TODO, lookup mesh name
-        ugrid = pyugrid.UGrid.from_ncfile(self.path, 'mesh2d')
+        ugrid = pyugrid.UGrid.from_ncfile(self.path, self.mesh2d)
 
         faces = np.ma.asanyarray(ugrid.faces)
 
@@ -105,16 +116,21 @@ class UGrid(NetCDF):
         ugrid = self.ugrid
         faces = ugrid['faces']
 
+        # removed in geojson >= 2.5
         crs = geojson.crs.Named(
             properties={
                 "name": "urn:ogc:def:crs:EPSG::{:d}".format(self.src_epsg)
             }
         )
-        counts = (~faces.mask).sum(axis=1)
+        mask = np.ma.getmaskarray(faces)
+        counts = (~mask).sum(axis=1)
         face_coordinates = ugrid['face_coordinates']
         features= []
         for i, (face, count) in tqdm.tqdm(enumerate(zip(face_coordinates, counts)), desc='grid->features'):
-            poly = shapely.geometry.Polygon(face[:count].tolist())
+            coords = face[:count].tolist()
+            # close hull
+            coords.append(coords[0])
+            poly = shapely.geometry.Polygon(coords)
             geometry = poly.__geo_interface__
             geometry['crs'] = dict(crs)
             feature = geojson.Feature(id=i, geometry=geometry)
@@ -131,26 +147,43 @@ class UGrid(NetCDF):
                 "name": "urn:ogc:def:crs:EPSG::{:d}".format(self.src_epsg)
             }
         )
-        counts = (~faces.mask).sum(axis=1)
+
+        mask = np.ma.getmaskarray(faces)
+        counts = (~mask).sum(axis=1)
         face_coordinates = ugrid['face_coordinates']
         polys = []
         for i, (face, count) in tqdm.tqdm(enumerate(zip(face_coordinates, counts)), desc='grid->polys'):
-            poly = shapely.geometry.Polygon(face[:count].tolist())
+            coords = face[:count].tolist()
+            # close hull
+            coords.append(coords[0])
+            poly = shapely.geometry.Polygon(coords)
             polys.append(poly)
         return polys
 
-    def to_polydata(self):
+
+    def to_polydata(self, transform=False):
         """convert grid to a vtk polydata object"""
         ugrid = self.ugrid
 
         faces = ugrid['faces']
+
         points = ugrid['points']
+        # transform points
+        if transform:
+            points = np.array(
+                self.srs['src2utm'].TransformPoints(
+                    np.c_[points[:, 1], points[:, 0]]
+                )
+            )
+
+
 
         n_cells = faces.shape[0]
 
         cell_array = tvtk.CellArray()
 
-        counts = (~faces.mask).sum(axis=1)
+        mask = np.ma.getmaskarray(faces)
+        counts = (~mask).sum(axis=1)
         assert faces.min() >= 0, 'expected 0 based faces'
         cell_idx = np.c_[counts, faces.filled(-999)].ravel()
         cell_idx = cell_idx[cell_idx != -999]
@@ -177,9 +210,9 @@ class UGrid(NetCDF):
         """lookup the waterlevel, depth and volume on timestep t"""
         # TODO: inspect mesh variable
         with netCDF4.Dataset(self.path) as ds:
-            s1 = ds.variables['mesh2d_s1'][t]
-            waterdepth = ds.variables['mesh2d_waterdepth'][t]
-            vol1 = ds.variables['mesh2d_vol1'][t]
+            s1 = ds.variables[self.mesh2d + '_s1'][t]
+            waterdepth = ds.variables[self.mesh2d + '_waterdepth'][t]
+            vol1 = ds.variables[self.mesh2d + '_vol1'][t]
         return dict(
             s1=s1,
             vol1=vol1,
@@ -191,8 +224,9 @@ class UGrid(NetCDF):
         # TODO: inspect mesh variables
         with netCDF4.Dataset(self.path) as ds:
             # cumulative velocities
-            ucx = ds.variables['mesh2d_ucx'][t]
-            ucy = ds.variables['mesh2d_ucy'][t]
+            ucx = ds.variables[self.mesh2d + '_ucx'][t]
+            ucy = ds.variables[self.mesh2d + '_ucy'][t]
+
         return dict(
             ucx=ucx,
             ucy=ucy

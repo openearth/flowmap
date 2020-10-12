@@ -254,7 +254,6 @@ def export(dataset, dem, format, **kwargs):
         )
 
 
-
     klass = flowmap.formats.get_format(dataset, **kwargs)
     ds = klass(dataset, dem=dem, **kwargs)
     logger.info("exporting grid")

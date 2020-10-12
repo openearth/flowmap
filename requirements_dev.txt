@@ -1,10 +1,9 @@
-pip==18.1
+pip==20.2.3
 bumpversion==0.5.3
-wheel==0.30.0
+wheel==0.35.1
 watchdog==0.8.3
 flake8==3.5.0
 coverage==4.4.2
 Sphinx==1.6.5
 cryptography>=2
-PyYAML==3.13
-awscli==1.16.87
+awscli==1.18.154

@@ -1,18 +1,7 @@
 Click==7.0
-mayavi==4.6.2
-netcdf4==1.4.2
-scikit-image==0.14.1
-numpy==1.15.4
-scipy==1.1.0
 tqdm==4.28.1
+# don't upgrade
 geojson==2.4.1
 mako==1.0.7
-matplotlib==3.0.2
-pandas==0.23.4
-rasterio==1.0.12
-geojson==2.4.1
-pyugrid==0.3.1
-Shapely==1.6.4
+https://github.com/NOAA-ORR-ERD/gridded/archive/v0.2.5.tar.gz
 simplejson==3.16.0
-cython==0.29.1
-pillow==5.3.0
