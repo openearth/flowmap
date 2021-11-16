@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "aws-sdk": "^2.77.0",
+    "aws-sdk": "^2.814.0",
     "lodash": "^4.17.4",
     "node-fetch": "^1.6.3",
     "proj4": "^2.4.3",
