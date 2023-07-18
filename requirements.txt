@@ -1,4 +1,4 @@
-Click==7.0
+Click==8.1.5
 mayavi==4.6.2
 netcdf4==1.4.2
 scikit-image==0.14.1
