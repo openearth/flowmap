@@ -3,7 +3,7 @@ mayavi==4.6.2
 netcdf4==1.4.2
 scikit-image==0.14.1
 numpy==1.25.2
-scipy==1.1.0
+scipy==1.11.2
 tqdm==4.28.1
 geojson==2.4.1
 mako==1.0.7
