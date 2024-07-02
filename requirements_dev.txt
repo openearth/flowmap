@@ -4,7 +4,7 @@ wheel==0.43.0
 watchdog==0.8.3
 flake8==3.5.0
 coverage==4.4.2
-Sphinx==1.6.5
+Sphinx==7.3.7
 cryptography>=2
 PyYAML==3.13
 awscli==1.16.87
