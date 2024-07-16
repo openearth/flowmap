@@ -7,4 +7,4 @@ coverage==4.4.2
 Sphinx==7.4.4
 cryptography>=2
 PyYAML==6.0.1
-awscli==1.16.87
+awscli==1.33.26
