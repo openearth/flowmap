@@ -4,7 +4,7 @@ netcdf4==1.4.2
 scikit-image==0.14.1
 numpy==2.0.1
 scipy==1.1.0
-tqdm==4.28.1
+tqdm==4.66.5
 geojson==2.4.1
 mako==1.0.7
 matplotlib==3.0.2
